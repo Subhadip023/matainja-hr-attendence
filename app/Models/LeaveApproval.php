@@ -1,0 +1,29 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class LeaveApproval extends Model
+{
+    protected $fillable = [
+        'leave_request_id', 'approver_id', 'decision',
+        'comments', 'decided_at', 'step_order',
+    ];
+
+    protected function casts(): array
+    {
+        return ['decided_at' => 'datetime'];
+    }
+
+    public function leaveRequest(): BelongsTo
+    {
+        return $this->belongsTo(LeaveRequest::class);
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approver_id');
+    }
+}
