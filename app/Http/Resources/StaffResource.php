@@ -15,6 +15,7 @@ class StaffResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
+            'initial_password' => $this->when($request->user()?->isAdmin(), $this->initial_password),
             'employee_code' => $this->employee_code,
             'first_name' => $this->first_name,
             'last_name' => $this->last_name,

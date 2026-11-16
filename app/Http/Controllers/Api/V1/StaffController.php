@@ -13,6 +13,7 @@ use App\Support\ApiResponder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class StaffController extends Controller
 {
@@ -61,18 +62,23 @@ class StaffController extends Controller
 
         $staff = DB::transaction(function () use ($validated, $request) {
             $userId = null;
+            $plainPassword = null;
 
             if ($request->boolean('create_login')) {
+                $plainPassword = $validated['password'] ?? 'matainja_'.Str::random(6);
                 $user = User::create([
                     'name' => trim($validated['first_name'].' '.($validated['last_name'] ?? '')),
                     'email' => $validated['email'],
-                    'password' => $validated['password'] ?? config('app.default_staff_password'),
+                    'password' => $plainPassword,
                 ]);
                 $user->assignRole($validated['role'] ?? 'Employee');
                 $userId = $user->id;
             }
 
-            return Staff::create(array_merge($validated, ['user_id' => $userId]));
+            return Staff::create(array_merge($validated, [
+                'user_id' => $userId,
+                'initial_password' => $plainPassword,
+            ]));
         });
 
         AuditLog::record('staff.created', $staff, null, $staff->toArray());
@@ -107,16 +113,19 @@ class StaffController extends Controller
 
         DB::transaction(function () use ($staff, $validated, $request) {
             if ($request->boolean('create_login') && ! $staff->user_id) {
+                $plainPassword = $validated['password'] ?? 'matainja_'.Str::random(6);
                 $user = User::create([
                     'name' => $staff->full_name,
                     'email' => $validated['email'] ?? $staff->email,
-                    'password' => $validated['password'] ?? config('app.default_staff_password'),
+                    'password' => $plainPassword,
                 ]);
                 $user->assignRole($validated['role'] ?? 'Employee');
                 $staff->user_id = $user->id;
+                $staff->initial_password = $plainPassword;
             } elseif (! empty($validated['password']) && $staff->user) {
                 $staff->user->update(['password' => $validated['password']]);
                 $staff->user->tokens()->delete();
+                $staff->initial_password = $validated['password'];
             }
 
             $staff->update(collect($validated)->except(['password', 'create_login', 'role'])->all());

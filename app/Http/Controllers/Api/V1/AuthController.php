@@ -71,6 +71,7 @@ class AuthController extends Controller
 
         $user->update(['password' => $validated['password']]);
         $user->tokens()->where('id', '!=', $user->currentAccessToken()->id)->delete();
+        $user->staff?->update(['initial_password' => null]);
 
         return ApiResponder::success(null, 'Password changed successfully');
     }
