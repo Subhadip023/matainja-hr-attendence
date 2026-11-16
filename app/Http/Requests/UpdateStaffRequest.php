@@ -32,6 +32,9 @@ class UpdateStaffRequest extends FormRequest
             'manager_id' => ['nullable', 'exists:staff,id', 'not_in:'.$staff?->id],
             'joining_date' => ['nullable', 'date'],
             'employment_status' => ['sometimes', 'in:active,probation,suspended,resigned,terminated'],
+            'create_login' => ['boolean'],
+            'role' => ['nullable', 'string', 'exists:roles,name', 'required_with:create_login'],
+            'password' => ['nullable', 'string', 'min:8'],
         ];
     }
 }

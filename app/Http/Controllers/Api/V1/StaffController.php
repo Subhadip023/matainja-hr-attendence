@@ -103,7 +103,24 @@ class StaffController extends Controller
     public function update(UpdateStaffRequest $request, Staff $staff): JsonResponse
     {
         $before = $staff->toArray();
-        $staff->update($request->validated());
+        $validated = $request->validated();
+
+        DB::transaction(function () use ($staff, $validated, $request) {
+            if ($request->boolean('create_login') && ! $staff->user_id) {
+                $user = User::create([
+                    'name' => $staff->full_name,
+                    'email' => $validated['email'] ?? $staff->email,
+                    'password' => $validated['password'] ?? config('app.default_staff_password'),
+                ]);
+                $user->assignRole($validated['role'] ?? 'Employee');
+                $staff->user_id = $user->id;
+            } elseif (! empty($validated['password']) && $staff->user) {
+                $staff->user->update(['password' => $validated['password']]);
+                $staff->user->tokens()->delete();
+            }
+
+            $staff->update(collect($validated)->except(['password', 'create_login', 'role'])->all());
+        });
 
         AuditLog::record('staff.updated', $staff, $before, $staff->fresh()->toArray());
 
