@@ -123,4 +123,17 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Default Staff Password
+    |--------------------------------------------------------------------------
+    |
+    | Initial password assigned to login accounts created through the staff
+    | endpoint (POST /staff with create_login). Share it with the employee
+    | so they can sign in and change it from their account settings.
+    |
+    */
+
+    'default_staff_password' => env('DEFAULT_STAFF_PASSWORD', 'password'),
+
 ];

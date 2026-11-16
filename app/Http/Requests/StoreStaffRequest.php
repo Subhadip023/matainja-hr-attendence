@@ -31,6 +31,7 @@ class StoreStaffRequest extends FormRequest
             'employment_status' => ['nullable', 'in:active,probation,suspended,resigned,terminated'],
             'create_login' => ['boolean'],
             'role' => ['nullable', 'string', 'exists:roles,name', 'required_with:create_login'],
+            'password' => ['nullable', 'string', 'min:8'],
         ];
     }
 }

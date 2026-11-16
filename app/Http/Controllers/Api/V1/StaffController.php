@@ -13,7 +13,6 @@ use App\Support\ApiResponder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class StaffController extends Controller
 {
@@ -67,7 +66,7 @@ class StaffController extends Controller
                 $user = User::create([
                     'name' => trim($validated['first_name'].' '.($validated['last_name'] ?? '')),
                     'email' => $validated['email'],
-                    'password' => Str::password(12),
+                    'password' => $validated['password'] ?? config('app.default_staff_password'),
                 ]);
                 $user->assignRole($validated['role'] ?? 'Employee');
                 $userId = $user->id;
