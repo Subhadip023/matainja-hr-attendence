@@ -98,6 +98,7 @@ class AuthController extends Controller
             function (User $user, string $password) {
                 $user->update(['password' => $password]);
                 $user->tokens()->delete();
+                $user->staff?->update(['initial_password' => null]);
             }
         );
 

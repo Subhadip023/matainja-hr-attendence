@@ -12,7 +12,21 @@ class Branch extends Model
 
     public const REFERENCE_CACHE_KEY = 'branches';
 
-    protected $fillable = ['name', 'code', 'address', 'timezone', 'status'];
+    protected $fillable = [
+        'name', 'code', 'address', 'latitude', 'longitude', 'geofence_radius_meters', 'timezone', 'status',
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'latitude' => 'float',
+            'longitude' => 'float',
+            'geofence_radius_meters' => 'integer',
+        ];
+    }
 
     public function staff(): HasMany
     {

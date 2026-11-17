@@ -118,7 +118,13 @@ class AttendanceController extends Controller
             ? null
             : $user->staff?->subordinates()->pluck('id') ?? collect([-1]);
 
-        $query = Attendance::with('staff:id,first_name,last_name,name')->where('work_date', now()->toDateString());
+        // Same work-date rule as check-in (the viewer's branch timezone), so the
+        // board doesn't show yesterday around midnight UTC.
+        $workDate = $user->staff
+            ? $this->service->workDate($user->staff, now()->toImmutable())
+            : now()->toDateString();
+
+        $query = Attendance::with('staff:id,first_name,last_name,name')->where('work_date', $workDate);
 
         if ($staffIds !== null) {
             $query->whereIn('staff_id', $staffIds);

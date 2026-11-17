@@ -16,9 +16,23 @@ class Staff extends Model
         'team_id', 'manager_id', 'joining_date', 'employment_status',
     ];
 
+    /**
+     * Never serialise the temporary password (e.g. into audit logs); the
+     * StaffResource exposes it to admins explicitly.
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['initial_password'];
+
+    /**
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
-        return ['joining_date' => 'date'];
+        return [
+            'joining_date' => 'date',
+            'initial_password' => 'encrypted',
+        ];
     }
 
     public function user(): BelongsTo

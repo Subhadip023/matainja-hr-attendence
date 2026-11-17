@@ -24,7 +24,10 @@ class BranchController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:50', 'unique:branches,code'],
-            'address' => ['nullable', 'string', 'max:500'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
+            'geofence_radius_meters' => ['nullable', 'integer', 'min:10', 'max:5000'],
             'timezone' => ['nullable', 'timezone'],
             'status' => ['nullable', 'in:active,inactive'],
         ]);
@@ -38,7 +41,10 @@ class BranchController extends Controller
     {
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
-            'address' => ['nullable', 'string', 'max:500'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
+            'geofence_radius_meters' => ['nullable', 'integer', 'min:10', 'max:5000'],
             'timezone' => ['nullable', 'timezone'],
             'status' => ['sometimes', 'in:active,inactive'],
         ]);

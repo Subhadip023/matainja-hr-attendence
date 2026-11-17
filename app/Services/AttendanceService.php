@@ -12,12 +12,17 @@ use Illuminate\Validation\ValidationException;
 
 class AttendanceService
 {
+    public function __construct(private readonly GeofenceService $geofence) {}
+
     /**
      * Record a check-in for the staff member. One active session per day,
      * enforced with a transaction and a unique (staff_id, work_date) key.
+     * Rejected when the punch location is outside the branch geofence.
      */
     public function checkIn(Staff $staff, array $meta = []): Attendance
     {
+        $this->geofence->assertWithinFence($staff->branch, $meta, 'check_in');
+
         return DB::transaction(function () use ($staff, $meta) {
             $now = CarbonImmutable::now();
             $workDate = $this->workDate($staff, $now);
@@ -73,6 +78,8 @@ class AttendanceService
      */
     public function checkOut(Staff $staff, array $meta = []): Attendance
     {
+        $this->geofence->assertWithinFence($staff->branch, $meta, 'check_out');
+
         return DB::transaction(function () use ($staff, $meta) {
             $now = CarbonImmutable::now();
 
@@ -155,7 +162,7 @@ class AttendanceService
         $now = CarbonImmutable::now();
         $break->update([
             'ended_at' => $now,
-            'duration_minutes' => $break->started_at->diffInMinutes($now),
+            'duration_minutes' => (int) $break->started_at->diffInMinutes($now),
         ]);
 
         $attendance->events()->create([

@@ -28,11 +28,17 @@ class SettingController extends Controller
         ]);
 
         foreach ($validated['settings'] as $setting) {
+            $value = $setting['value'] ?? null;
+
             CompanySetting::updateOrCreate(
                 ['key' => $setting['key']],
                 [
-                    'value' => is_scalar($setting['value'] ?? null) ? $setting['value'] : json_encode($setting['value']),
-                    'data_type' => is_scalar($setting['value'] ?? null) ? 'string' : 'json',
+                    'value' => $this->storedValue($value),
+                    'data_type' => match (true) {
+                        is_bool($value) => 'boolean',
+                        is_scalar($value) || $value === null => 'string',
+                        default => 'json',
+                    },
                 ]
             );
         }
@@ -43,5 +49,19 @@ class SettingController extends Controller
             CompanySetting::pluck('value', 'key'),
             'Settings updated'
         );
+    }
+
+    /**
+     * Booleans are stored as "true"/"false" (a plain string cast would turn
+     * false into "" and make it unreadable); arrays are JSON-encoded.
+     */
+    private function storedValue(mixed $value): ?string
+    {
+        return match (true) {
+            is_bool($value) => $value ? 'true' : 'false',
+            $value === null => null,
+            is_scalar($value) => (string) $value,
+            default => json_encode($value),
+        };
     }
 }
