@@ -12,6 +12,7 @@ use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\User;
 use App\Support\ApiResponder;
+use App\Support\ReferenceCache;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class LeaveController extends Controller
 {
     public function types(): JsonResponse
     {
-        return ApiResponder::success(LeaveType::all(), 'Leave types retrieved');
+        return ApiResponder::success(ReferenceCache::get('leave_types', fn () => LeaveType::all()), 'Leave types retrieved');
     }
 
     public function balances(Request $request): JsonResponse

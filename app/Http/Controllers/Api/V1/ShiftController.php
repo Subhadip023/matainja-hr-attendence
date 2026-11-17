@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Shift;
 use App\Support\ApiResponder;
+use App\Support\ReferenceCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,7 +13,10 @@ class ShiftController extends Controller
 {
     public function index(): JsonResponse
     {
-        return ApiResponder::success(Shift::latest()->get(), 'Shifts retrieved successfully');
+        return ApiResponder::success(
+            ReferenceCache::get('shifts', fn () => Shift::latest()->get()),
+            'Shifts retrieved successfully'
+        );
     }
 
     public function store(Request $request): JsonResponse

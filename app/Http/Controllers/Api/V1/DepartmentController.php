@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Support\ApiResponder;
+use App\Support\ReferenceCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,7 +13,10 @@ class DepartmentController extends Controller
 {
     public function index(): JsonResponse
     {
-        return ApiResponder::success(Department::with('head:id,first_name,last_name,name')->latest()->get(), 'Departments retrieved successfully');
+        return ApiResponder::success(
+            ReferenceCache::get('departments', fn () => Department::with('head:id,first_name,last_name,name')->latest()->get()),
+            'Departments retrieved successfully'
+        );
     }
 
     public function store(Request $request): JsonResponse

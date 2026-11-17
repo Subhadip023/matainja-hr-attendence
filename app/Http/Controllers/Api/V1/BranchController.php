@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Support\ApiResponder;
+use App\Support\ReferenceCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,7 +13,10 @@ class BranchController extends Controller
 {
     public function index(): JsonResponse
     {
-        return ApiResponder::success(Branch::latest()->get(), 'Branches retrieved successfully');
+        return ApiResponder::success(
+            ReferenceCache::get('branches', fn () => Branch::latest()->get()),
+            'Branches retrieved successfully'
+        );
     }
 
     public function store(Request $request): JsonResponse

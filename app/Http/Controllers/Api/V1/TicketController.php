@@ -8,6 +8,7 @@ use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Support\ApiResponder;
+use App\Support\ReferenceCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,7 @@ class TicketController extends Controller
 {
     public function categories(): JsonResponse
     {
-        return ApiResponder::success(TicketCategory::all(), 'Ticket categories retrieved');
+        return ApiResponder::success(ReferenceCache::get('ticket_categories', fn () => TicketCategory::all()), 'Ticket categories retrieved');
     }
 
     public function index(Request $request): JsonResponse

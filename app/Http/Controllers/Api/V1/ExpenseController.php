@@ -9,6 +9,7 @@ use App\Models\ExpenseApproval;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseClaim;
 use App\Support\ApiResponder;
+use App\Support\ReferenceCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,7 +17,7 @@ class ExpenseController extends Controller
 {
     public function categories(): JsonResponse
     {
-        return ApiResponder::success(ExpenseCategory::all(), 'Expense categories retrieved');
+        return ApiResponder::success(ReferenceCache::get('expense_categories', fn () => ExpenseCategory::all()), 'Expense categories retrieved');
     }
 
     public function index(Request $request): JsonResponse

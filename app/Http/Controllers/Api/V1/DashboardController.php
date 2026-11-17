@@ -52,14 +52,17 @@ class DashboardController extends Controller
         $teamIds = $staff?->subordinates()->pluck('id') ?? collect();
 
         $today = now()->toDateString();
-        $todayAttendance = Attendance::whereIn('staff_id', $teamIds)
-            ->where('work_date', $today)->get();
+        $statusCounts = Attendance::whereIn('staff_id', $teamIds)
+            ->where('work_date', $today)
+            ->selectRaw('status, COUNT(*) as c')
+            ->groupBy('status')
+            ->pluck('c', 'status');
 
         return ApiResponder::success([
             'team_size' => $teamIds->count(),
-            'present_today' => $todayAttendance->whereIn('status', ['present', 'late'])->count(),
-            'late_today' => $todayAttendance->where('status', 'late')->count(),
-            'absent_today' => $teamIds->count() - $todayAttendance->count(),
+            'present_today' => (int) ($statusCounts['present'] ?? 0) + (int) ($statusCounts['late'] ?? 0),
+            'late_today' => (int) ($statusCounts['late'] ?? 0),
+            'absent_today' => $teamIds->count() - (int) $statusCounts->sum(),
             'pending_leave_approvals' => LeaveApproval::where('approver_id', $request->user()->id)
                 ->whereNull('decision')->count(),
         ], 'Manager dashboard retrieved');
@@ -68,12 +71,15 @@ class DashboardController extends Controller
     public function hr(Request $request): JsonResponse
     {
         $today = now()->toDateString();
-        $todayAttendance = Attendance::where('work_date', $today)->get();
+        $statusCounts = Attendance::where('work_date', $today)
+            ->selectRaw('status, COUNT(*) as c')
+            ->groupBy('status')
+            ->pluck('c', 'status');
 
         return ApiResponder::success([
             'headcount' => Staff::where('employment_status', 'active')->count(),
-            'present_today' => $todayAttendance->whereIn('status', ['present', 'late'])->count(),
-            'late_today' => $todayAttendance->where('status', 'late')->count(),
+            'present_today' => (int) ($statusCounts['present'] ?? 0) + (int) ($statusCounts['late'] ?? 0),
+            'late_today' => (int) ($statusCounts['late'] ?? 0),
             'on_leave_today' => LeaveRequest::where('status', 'approved')
                 ->where('from_date', '<=', $today)->where('to_date', '>=', $today)->count(),
             'pending_leave_requests' => LeaveRequest::where('status', 'pending')->count(),

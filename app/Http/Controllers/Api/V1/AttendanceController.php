@@ -56,7 +56,7 @@ class AttendanceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $query = Attendance::with('staff')->latest('work_date');
+        $query = Attendance::with('staff:id,first_name,last_name,name')->latest('work_date');
 
         // Scope: employees see own, managers see team, HR/admin see all.
         if ($user->hasRole('Manager') && ! $user->isAdmin()) {
@@ -118,7 +118,7 @@ class AttendanceController extends Controller
             ? null
             : $user->staff?->subordinates()->pluck('id') ?? collect([-1]);
 
-        $query = Attendance::with('staff')->where('work_date', now()->toDateString());
+        $query = Attendance::with('staff:id,first_name,last_name,name')->where('work_date', now()->toDateString());
 
         if ($staffIds !== null) {
             $query->whereIn('staff_id', $staffIds);

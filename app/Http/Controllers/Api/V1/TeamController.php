@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Team;
 use App\Support\ApiResponder;
+use App\Support\ReferenceCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,7 +14,7 @@ class TeamController extends Controller
     public function index(): JsonResponse
     {
         return ApiResponder::success(
-            Team::with(['department:id,name', 'manager:id,first_name,last_name,name'])->latest()->get(),
+            ReferenceCache::get('teams', fn () => Team::with(['department:id,name', 'manager:id,first_name,last_name,name'])->latest()->get()),
             'Teams retrieved successfully'
         );
     }
