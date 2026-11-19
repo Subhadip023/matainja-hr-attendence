@@ -20,7 +20,7 @@ class AttendanceController extends Controller
         $attendance = $this->service->checkIn($request->user()->staff, $request->validated());
 
         return ApiResponder::success(
-            new AttendanceResource($attendance->load('shift')),
+            new AttendanceResource($attendance->load(['shift', 'events', 'staff.branch'])),
             'Checked in successfully',
             201
         );
@@ -31,7 +31,7 @@ class AttendanceController extends Controller
         $attendance = $this->service->checkOut($request->user()->staff, $request->validated());
 
         return ApiResponder::success(
-            new AttendanceResource($attendance->load('shift')),
+            new AttendanceResource($attendance->load(['shift', 'events', 'staff.branch'])),
             'Checked out successfully'
         );
     }
@@ -41,13 +41,14 @@ class AttendanceController extends Controller
         $staff = $request->user()->staff;
         $workDate = $this->service->workDate($staff, now()->toImmutable());
 
-        $attendance = Attendance::with(['shift', 'openBreak', 'events'])
+        $attendance = Attendance::with(['shift', 'openBreak', 'events', 'staff.branch'])
             ->where('staff_id', $staff->id)
             ->where('work_date', $workDate)
             ->first();
 
         return ApiResponder::success([
             'work_date' => $workDate,
+            'is_wfh_day' => $this->service->isWfhDay($staff, $workDate),
             'attendance' => $attendance ? new AttendanceResource($attendance) : null,
             'shift' => $this->service->currentShiftAssignment($staff, $workDate)?->shift,
         ], "Today's attendance retrieved");
@@ -56,7 +57,7 @@ class AttendanceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $query = Attendance::with('staff:id,first_name,last_name,name')->latest('work_date');
+        $query = Attendance::with(['staff:id,first_name,last_name,name,branch_id', 'staff.branch', 'events'])->latest('work_date');
 
         // Scope: employees see own, managers see team, HR/admin see all.
         if ($user->hasRole('Manager') && ! $user->isAdmin()) {
@@ -106,7 +107,7 @@ class AttendanceController extends Controller
         }
 
         return ApiResponder::success(
-            new AttendanceResource($attendance->load(['staff', 'shift', 'events', 'breaks'])),
+            new AttendanceResource($attendance->load(['staff.branch', 'shift', 'events', 'breaks'])),
             'Attendance retrieved successfully'
         );
     }
@@ -124,7 +125,7 @@ class AttendanceController extends Controller
             ? $this->service->workDate($user->staff, now()->toImmutable())
             : now()->toDateString();
 
-        $query = Attendance::with('staff:id,first_name,last_name,name')->where('work_date', $workDate);
+        $query = Attendance::with(['staff:id,first_name,last_name,name,branch_id', 'staff.branch', 'events'])->where('work_date', $workDate);
 
         if ($staffIds !== null) {
             $query->whereIn('staff_id', $staffIds);
@@ -159,7 +160,8 @@ class AttendanceController extends Controller
 
         return ApiResponder::success([
             'total_days' => (clone $query)->count(),
-            'present_days' => (clone $query)->whereIn('status', ['present', 'late'])->count(),
+            'present_days' => (clone $query)->whereIn('status', ['present', 'late', 'wfh'])->count(),
+            'wfh_days' => (clone $query)->where('status', 'wfh')->count(),
             'late_days' => (clone $query)->where('status', 'late')->count(),
             'absent_days' => (clone $query)->where('status', 'absent')->count(),
             'worked_minutes' => (clone $query)->sum('worked_minutes'),

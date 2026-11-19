@@ -60,7 +60,8 @@ class DashboardController extends Controller
 
         return ApiResponder::success([
             'team_size' => $teamIds->count(),
-            'present_today' => (int) ($statusCounts['present'] ?? 0) + (int) ($statusCounts['late'] ?? 0),
+            'present_today' => (int) ($statusCounts['present'] ?? 0) + (int) ($statusCounts['late'] ?? 0) + (int) ($statusCounts['wfh'] ?? 0),
+            'wfh_today' => (int) ($statusCounts['wfh'] ?? 0),
             'late_today' => (int) ($statusCounts['late'] ?? 0),
             'absent_today' => $teamIds->count() - (int) $statusCounts->sum(),
             'pending_leave_approvals' => LeaveApproval::where('approver_id', $request->user()->id)
@@ -78,7 +79,8 @@ class DashboardController extends Controller
 
         return ApiResponder::success([
             'headcount' => Staff::where('employment_status', 'active')->count(),
-            'present_today' => (int) ($statusCounts['present'] ?? 0) + (int) ($statusCounts['late'] ?? 0),
+            'present_today' => (int) ($statusCounts['present'] ?? 0) + (int) ($statusCounts['late'] ?? 0) + (int) ($statusCounts['wfh'] ?? 0),
+            'wfh_today' => (int) ($statusCounts['wfh'] ?? 0),
             'late_today' => (int) ($statusCounts['late'] ?? 0),
             'on_leave_today' => LeaveRequest::where('status', 'approved')
                 ->where('from_date', '<=', $today)->where('to_date', '>=', $today)->count(),

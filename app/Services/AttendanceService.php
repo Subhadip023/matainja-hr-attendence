@@ -4,26 +4,41 @@ namespace App\Services;
 
 use App\Models\Attendance;
 use App\Models\BreakRecord;
+use App\Models\CompanySetting;
 use App\Models\Staff;
 use App\Models\StaffShiftAssignment;
+use App\Models\WfhRequest;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AttendanceService
 {
+    /**
+     * Company setting: comma-separated ISO weekdays (1 = Monday ... 7 = Sunday)
+     * that are work-from-home days for everyone. Defaults to Wednesday.
+     */
+    public const SETTING_WFH_WEEKDAYS = 'attendance.wfh_weekdays';
+
+    public const DEFAULT_WFH_WEEKDAYS = '3';
+
     public function __construct(private readonly GeofenceService $geofence) {}
 
     /**
      * Record a check-in for the staff member. One active session per day,
      * enforced with a transaction and a unique (staff_id, work_date) key.
-     * Rejected when the punch location is outside the branch geofence.
+     * Rejected when the punch location is outside the branch geofence, except
+     * on work-from-home days (see isWfhDay), where the location is only recorded.
      */
     public function checkIn(Staff $staff, array $meta = []): Attendance
     {
-        $this->geofence->assertWithinFence($staff->branch, $meta, 'check_in');
+        $isWfh = $this->isWfhDay($staff, $this->workDate($staff, CarbonImmutable::now()));
 
-        return DB::transaction(function () use ($staff, $meta) {
+        if (! $isWfh) {
+            $this->geofence->assertWithinFence($staff->branch, $meta, 'check_in');
+        }
+
+        return DB::transaction(function () use ($staff, $meta, $isWfh) {
             $now = CarbonImmutable::now();
             $workDate = $this->workDate($staff, $now);
 
@@ -55,7 +70,7 @@ class AttendanceService
             $attendance->fill([
                 'shift_id' => $assignment?->shift_id,
                 'check_in_at' => $now,
-                'status' => $lateMinutes > 0 ? 'late' : 'present',
+                'status' => $isWfh ? 'wfh' : ($lateMinutes > 0 ? 'late' : 'present'),
                 'late_minutes' => $lateMinutes,
                 'source' => 'app',
             ])->save();
@@ -78,8 +93,6 @@ class AttendanceService
      */
     public function checkOut(Staff $staff, array $meta = []): Attendance
     {
-        $this->geofence->assertWithinFence($staff->branch, $meta, 'check_out');
-
         return DB::transaction(function () use ($staff, $meta) {
             $now = CarbonImmutable::now();
 
@@ -100,6 +113,13 @@ class AttendanceService
                 throw ValidationException::withMessages([
                     'check_out' => ['End your active break before checking out.'],
                 ]);
+            }
+
+            // A WFH session (or a WFH day) checks out from wherever the person is.
+            $isWfh = $attendance->status === 'wfh'
+                || $this->isWfhDay($staff, $attendance->work_date->toDateString());
+            if (! $isWfh) {
+                $this->geofence->assertWithinFence($staff->branch, $meta, 'check_out');
             }
 
             $attendance->check_out_at = $now;
@@ -182,6 +202,37 @@ class AttendanceService
         $tz = $staff->branch?->timezone ?: config('app.timezone');
 
         return $now->setTimezone($tz)->toDateString();
+    }
+
+    /**
+     * Work-from-home day for this person: a company-wide WFH weekday
+     * (Wednesday by default) or a date covered by an approved WFH request.
+     */
+    public function isWfhDay(Staff $staff, string $workDate): bool
+    {
+        $weekday = CarbonImmutable::parse($workDate)->isoWeekday();
+        if (in_array($weekday, $this->wfhWeekdays(), true)) {
+            return true;
+        }
+
+        return WfhRequest::where('staff_id', $staff->id)
+            ->where('status', 'approved')
+            ->whereDate('from_date', '<=', $workDate)
+            ->whereDate('to_date', '>=', $workDate)
+            ->exists();
+    }
+
+    /**
+     * @return list<int> ISO weekdays that are WFH for everyone
+     */
+    public function wfhWeekdays(): array
+    {
+        $raw = CompanySetting::where('key', self::SETTING_WFH_WEEKDAYS)->value('value') ?? self::DEFAULT_WFH_WEEKDAYS;
+
+        return array_values(array_filter(
+            array_map('intval', explode(',', (string) $raw)),
+            fn (int $d) => $d >= 1 && $d <= 7,
+        ));
     }
 
     public function currentShiftAssignment(Staff $staff, string $workDate): ?StaffShiftAssignment

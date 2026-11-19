@@ -38,6 +38,7 @@ class RolePermissionSeeder extends Seeder
                 'assets.manage', 'tickets.manage',
             ])->values()->all(),
             'Manager' => $all->only([
+                'employees.create',
                 'attendance.view_team', 'leave.approve', 'leave.apply',
                 'reports.view', 'expenses.approve',
             ])->values()->all(),
