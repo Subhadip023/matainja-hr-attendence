@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin;
+use App\Models\Invoice;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('admin.dashboard'));
@@ -44,6 +45,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/organisation/{type}/{id}/edit', [Admin\OrgController::class, 'edit'])->name('org.edit');
         Route::put('/organisation/{type}/{id}', [Admin\OrgController::class, 'update'])->name('org.update');
         Route::delete('/organisation/{type}/{id}', [Admin\OrgController::class, 'destroy'])->name('org.destroy');
+
+        // Invoices
+        Route::get('/invoices', [Admin\InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/invoices/create', [Admin\InvoiceController::class, 'create'])->name('invoices.create');
+        Route::post('/invoices', [Admin\InvoiceController::class, 'store'])->name('invoices.store');
+        Route::get('/invoices/{invoice}', [Admin\InvoiceController::class, 'show'])->name('invoices.show');
+        Route::get('/invoices/{invoice}/pdf', [Admin\InvoiceController::class, 'pdf'])->name('invoices.pdf');
+        // Old browser-print link, kept so bookmarks still work.
+        Route::get('/invoices/{invoice}/print', fn (Invoice $invoice) => redirect()->route('admin.invoices.pdf', ['invoice' => $invoice, 'inline' => 1]));
+        Route::get('/invoices/{invoice}/edit', [Admin\InvoiceController::class, 'edit'])->name('invoices.edit');
+        Route::put('/invoices/{invoice}', [Admin\InvoiceController::class, 'update'])->name('invoices.update');
+        Route::post('/invoices/{invoice}/status', [Admin\InvoiceController::class, 'status'])->name('invoices.status');
+        Route::delete('/invoices/{invoice}', [Admin\InvoiceController::class, 'destroy'])->name('invoices.destroy');
 
         // Attendance & approvals
         Route::get('/attendance', [Admin\AttendanceController::class, 'index'])->name('attendance.index');

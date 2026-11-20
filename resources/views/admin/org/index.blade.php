@@ -6,23 +6,48 @@
 
     @isset($def['intro'])<p class="muted" style="margin-top:-6px">{{ $def['intro'] }}</p>@endisset
 
-    <details class="card" @if ($errors->any() || $rows->total() === 0) open @endif style="margin-bottom:16px">
-        <summary class="card-head"><h2>+ Add {{ strtolower($def['singular']) }}</h2><span class="muted small">Click to {{ $errors->any() ? 'hide' : 'open' }}</span></summary>
-        <form method="POST" action="{{ route('admin.org.store', $type) }}" class="card-body">
-            @csrf
-            @include('admin.org._fields', ['record' => $blank])
-            <div class="actions" style="justify-content:flex-end">
-                <button class="btn primary" type="submit">Add {{ strtolower($def['singular']) }}</button>
-            </div>
-        </form>
-    </details>
+    @if (! empty($def['modal']))
+        {{-- Add form in a pop-up. Re-opens by itself when the last submit failed validation. --}}
+        <dialog id="add-record-dialog" class="dialog-wide" @if ($errors->any()) data-open-on-load @endif aria-labelledby="add-record-title">
+            <form method="POST" action="{{ route('admin.org.store', $type) }}">
+                @csrf
+                <div class="card-head">
+                    <h2 id="add-record-title">Add {{ strtolower($def['singular']) }}</h2>
+                    <button type="button" class="btn sm ghost" data-close-dialog aria-label="Close">✕</button>
+                </div>
+                <div class="card-body">
+                    @include('admin.org._fields', ['record' => $blank])
+                </div>
+                <div class="card-body actions" style="justify-content:flex-end;border-top:1px solid var(--border)">
+                    <button type="button" class="btn" data-close-dialog>Cancel</button>
+                    <button class="btn primary" type="submit">Add {{ strtolower($def['singular']) }}</button>
+                </div>
+            </form>
+        </dialog>
+    @else
+        <details class="card" @if ($errors->any() || $rows->total() === 0) open @endif style="margin-bottom:16px">
+            <summary class="card-head"><h2>+ Add {{ strtolower($def['singular']) }}</h2><span class="muted small">Click to {{ $errors->any() ? 'hide' : 'open' }}</span></summary>
+            <form method="POST" action="{{ route('admin.org.store', $type) }}" class="card-body">
+                @csrf
+                @include('admin.org._fields', ['record' => $blank])
+                <div class="actions" style="justify-content:flex-end">
+                    <button class="btn primary" type="submit">Add {{ strtolower($def['singular']) }}</button>
+                </div>
+            </form>
+        </details>
+    @endif
 
     <div class="card">
         <div class="card-head">
             <h2>{{ $def['title'] }} <span class="muted small">({{ $rows->total() }})</span></h2>
-            <form method="GET" class="toolbar">
-                <input type="search" name="q" value="{{ request('q') }}" placeholder="Search {{ strtolower($def['title']) }}">
-            </form>
+            <div class="actions">
+                <form method="GET" class="toolbar">
+                    <input type="search" name="q" value="{{ request('q') }}" placeholder="Search {{ strtolower($def['title']) }}">
+                </form>
+                @if (! empty($def['modal']))
+                    <button type="button" class="btn primary" data-open-dialog="add-record-dialog">+ Add {{ strtolower($def['singular']) }}</button>
+                @endif
+            </div>
         </div>
         <div class="table-wrap">
             <table>
@@ -56,7 +81,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="{{ count($def['columns']) + 1 }}" class="empty">Nothing here yet. Add the first {{ strtolower($def['singular']) }} above.</td></tr>
+                    <tr><td colspan="{{ count($def['columns']) + 1 }}" class="empty">Nothing here yet. Add the first {{ strtolower($def['singular']) }} {{ empty($def['modal']) ? 'above' : 'with the button above' }}.</td></tr>
                 @endforelse
                 </tbody>
             </table>

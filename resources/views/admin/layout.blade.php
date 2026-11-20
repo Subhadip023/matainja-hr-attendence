@@ -6,7 +6,8 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow">
     <title>@yield('title', 'Dashboard') · HRM Matainja Admin</title>
-    <link rel="stylesheet" href="{{ asset('admin-assets/admin.css') }}?v=2">
+    <link rel="stylesheet" href="{{ asset('admin-assets/admin.css') }}?v=4">
+    @stack('styles')
 </head>
 <body>
 @php
@@ -20,7 +21,16 @@
         'approvals' => 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
         'settings' => 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
         'audit' => 'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z',
+        'clients' => 'M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z',
+        'invoices' => 'M19.5 3.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5zM19 19.09H5V4.91h14v14.18zM6 15h12v2H6zm0-4h12v2H6zm0-4h12v2H6z',
     ];
+    // Clients share the organisation screens, so tell the two sidebar links apart by {type}.
+    $onClients = request()->routeIs('admin.org.*') && request()->route('type') === 'clients';
+    $isActive = fn (array $item) => match ($item[2]) {
+        'clients' => $onClients,
+        'org' => request()->routeIs('admin.org.*') && ! $onClients,
+        default => request()->routeIs($item[3]),
+    };
     $nav = [
         'Overview' => [
             ['admin.dashboard', 'Dashboard', 'dashboard', 'admin.dashboard'],
@@ -33,6 +43,8 @@
         'Operations' => [
             ['admin.attendance.index', 'Attendance', 'attendance', 'admin.attendance.*'],
             ['admin.approvals.index', 'Approvals', 'approvals', 'admin.approvals.*'],
+            ['admin.org.index', 'Clients', 'clients', 'admin.org.*', ['type' => 'clients']],
+            ['admin.invoices.index', 'Invoices', 'invoices', 'admin.invoices.*'],
         ],
         'Setup' => [
             ['admin.org.index', 'Organisation', 'org', 'admin.org.*', ['type' => 'branches']],
@@ -53,7 +65,7 @@
             @foreach ($nav as $group => $items)
                 <div class="nav-label">{{ $group }}</div>
                 @foreach ($items as $item)
-                    <a href="{{ route($item[0], $item[4] ?? []) }}" class="{{ request()->routeIs($item[3]) ? 'active' : '' }}">
+                    <a href="{{ route($item[0], $item[4] ?? []) }}" class="{{ $isActive($item) ? 'active' : '' }}">
                         <svg viewBox="0 0 24 24" fill="currentColor"><path d="{{ $icons[$item[2]] }}"/></svg>
                         {{ $item[1] }}
                         @if ($item[2] === 'approvals' && ($pendingApprovals ?? 0) > 0)
@@ -111,6 +123,23 @@
         var msg = e.target.getAttribute('data-confirm');
         if (msg && !window.confirm(msg)) { e.preventDefault(); }
     });
+
+    // Generic pop-ups: <button data-open-dialog="id">, <button data-close-dialog>, <dialog data-open-on-load>.
+    document.addEventListener('click', function (e) {
+        var opener = e.target.closest('[data-open-dialog]');
+        if (opener) {
+            var dlg = document.getElementById(opener.getAttribute('data-open-dialog'));
+            dlg.showModal();
+            var first = dlg.querySelector('input:not([type=hidden]), select, textarea');
+            if (first) first.focus();
+            return;
+        }
+        var closer = e.target.closest('[data-close-dialog]');
+        if (closer) { closer.closest('dialog').close(); return; }
+        // Click on the dark backdrop closes the pop-up.
+        if (e.target.tagName === 'DIALOG') { e.target.close(); }
+    });
+    document.querySelectorAll('dialog[data-open-on-load]').forEach(function (dlg) { dlg.showModal(); });
 
     // Approve / reject with an optional (approve) or required (reject) comment.
     document.addEventListener('click', function (e) {

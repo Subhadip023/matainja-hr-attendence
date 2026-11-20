@@ -15,7 +15,7 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('admin.settings.update') }}">
+    <form method="POST" action="{{ route('admin.settings.update') }}" enctype="multipart/form-data">
         @csrf @method('PUT')
         <div class="grid grid-2" style="align-items:start">
             <div class="card">
@@ -45,23 +45,38 @@
             </div>
 
             <div class="card">
-                <div class="card-head"><h2>Other settings</h2></div>
-                <div class="card-body">
-                    @forelse ($others as $key => $setting)
-                        <div class="field">
-                            <label class="mono" for="s_{{ $loop->index }}">{{ $key }}</label>
-                            <input id="s_{{ $loop->index }}" type="text" name="custom[{{ $key }}]" value="{{ old('custom.'.$key, $setting->value) }}">
+                <div class="card-head"><h2>Invoicing</h2></div>
+                <div class="card-body form-grid">
+                    @php $logo = app(\App\Services\InvoiceService::class)->logoDataUri(); @endphp
+                    <div class="field wide">
+                        <label for="company_logo">Organisation logo</label>
+                        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                            <div class="logo-preview" id="logo-preview">
+                                @if ($logo)<img src="{{ $logo }}" alt="Current logo">@else<span class="muted small">No logo</span>@endif
+                            </div>
+                            <div style="flex:1;min-width:220px">
+                                <input id="company_logo" type="file" name="company_logo" accept="image/png,image/jpeg">
+                                @if ($logo)
+                                    <label class="check" style="font-weight:400;margin-top:8px"><input type="checkbox" name="remove_logo" value="1"> Remove the current logo</label>
+                                @endif
+                                <div class="hint">PNG or JPG, up to 1 MB. A wide logo with a transparent background looks best. Shown above the organisation name on invoices and PDFs.</div>
+                                @error('company_logo')<div class="error">{{ $message }}</div>@enderror
+                            </div>
                         </div>
-                    @empty
-                        <p class="muted">No other settings stored yet.</p>
-                    @endforelse
-                    <details>
-                        <summary class="small" style="color:var(--brand);margin-bottom:10px">+ Add a setting</summary>
-                        <div class="form-grid">
-                            <div class="field"><label>Key</label><input type="text" name="new_key" value="{{ old('new_key') }}" placeholder="company.name"></div>
-                            <div class="field"><label>Value</label><input type="text" name="new_value" value="{{ old('new_value') }}"></div>
+                    </div>
+                    @foreach (\App\Http\Controllers\Admin\SettingController::invoicingKeys() as $key => $label)
+                        @php $alias = str_replace('.', '_', $key); $val = old('invoicing.'.$alias, $stored[$key]->value ?? ''); @endphp
+                        <div class="field {{ in_array($key, ['company.address', 'invoice.default_terms'], true) ? 'wide' : '' }}">
+                            <label for="inv_{{ $alias }}">{{ $label }}</label>
+                            @if (in_array($key, ['company.address', 'invoice.default_terms'], true))
+                                <textarea id="inv_{{ $alias }}" name="invoicing[{{ $alias }}]" maxlength="2000">{{ $val }}</textarea>
+                            @else
+                                <input id="inv_{{ $alias }}" type="{{ $key === 'invoice.due_days' ? 'number' : 'text' }}" name="invoicing[{{ $alias }}]" value="{{ $val }}"
+                                       placeholder="{{ ['company.name' => config('app.name'), 'invoice.prefix' => 'INV', 'invoice.due_days' => '15'][$key] ?? '' }}">
+                            @endif
                         </div>
-                    </details>
+                    @endforeach
+                    <div class="hint wide">Printed at the top of every invoice. Numbers look like PREFIX-{{ now()->year }}-0001.</div>
                 </div>
             </div>
         </div>
@@ -70,3 +85,24 @@
         </div>
     </form>
 @endsection
+
+@push('styles')
+<style>
+    .logo-preview { width: 160px; height: 72px; border: 1px dashed var(--border); border-radius: 8px; display: grid; place-items: center; background: #fafbfc; overflow: hidden; }
+    .logo-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+</style>
+@endpush
+
+@push('scripts')
+<script>
+    // Show the chosen logo straight away, before saving.
+    document.getElementById('company_logo').addEventListener('change', function () {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var img = document.createElement('img');
+        img.alt = 'New logo';
+        img.src = URL.createObjectURL(file);
+        document.getElementById('logo-preview').replaceChildren(img);
+    });
+</script>
+@endpush

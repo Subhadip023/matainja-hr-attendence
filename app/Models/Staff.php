@@ -109,4 +109,18 @@ class Staff extends Model
     {
         return trim("{$this->first_name} {$this->last_name}") ?: ($this->name ?? '');
     }
+
+    /** Next unused employee code, following the newest code's prefix (EMP-004 -> EMP-005). */
+    public static function nextEmployeeCode(): string
+    {
+        $codes = static::orderBy('id')->pluck('employee_code')->filter();
+        $max = $codes->map(fn ($c) => (int) preg_replace('/\D/', '', (string) $c))->max() ?? 0;
+        $prefix = preg_replace('/\d+$/', '', (string) $codes->last()) ?: 'EMP';
+
+        do {
+            $code = $prefix.str_pad((string) ++$max, 3, '0', STR_PAD_LEFT);
+        } while (static::where('employee_code', $code)->exists());
+
+        return $code;
+    }
 }

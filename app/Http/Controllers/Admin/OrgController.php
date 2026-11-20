@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Models\AuditLog;
 use App\Models\Branch;
+use App\Models\Client;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Holiday;
 use App\Models\LeaveType;
 use App\Models\Shift;
 use App\Models\Staff;
+use App\Models\Tax;
 use App\Models\Team;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
@@ -137,7 +139,8 @@ class OrgController extends AdminController
     /** @return array<string, string> */
     private function tabs(): array
     {
-        return collect($this->resources())->map(fn ($d) => $d['title'])->all();
+        // Clients have their own sidebar entry, so they stay out of the Organisation tabs.
+        return collect($this->resources())->except('clients')->map(fn ($d) => $d['title'])->all();
     }
 
     /** @return array<string, mixed> */
@@ -273,6 +276,51 @@ class OrgController extends AdminController
                     'requires_document' => ['label' => 'Needs a document', 'type' => 'checkbox', 'rules' => ['nullable']],
                 ],
                 'defaults' => ['paid' => true],
+            ],
+            'taxes' => [
+                'model' => Tax::class, 'title' => 'Taxes', 'singular' => 'Tax',
+                'intro' => 'Tax rates you can tick on an invoice. "Default" taxes are ticked on new invoices. Changing a rate only affects invoices you create or edit afterwards.',
+                'search' => 'name', 'order' => ['is_active' => 'desc', 'name' => 'asc', 'rate' => 'asc'],
+                'columns' => [
+                    'name' => 'Name',
+                    'rate' => ['Rate', fn ($r) => Tax::formatRate($r->rate).'%'],
+                    'description' => ['Description', fn ($r) => $r->description ?: '—'],
+                    'is_default' => ['Default', fn ($r) => $r->is_default ? 'Yes' : '—'],
+                    'is_active' => ['Status', fn ($r) => $r->is_active ? 'Active' : 'Turned off'],
+                ],
+                'fields' => [
+                    'name' => ['label' => 'Name', 'rules' => ['required', 'string', 'max:100'], 'hint' => 'e.g. CGST, SGST, IGST, GST'],
+                    'rate' => ['label' => 'Rate (%)', 'type' => 'number', 'step' => '0.01', 'rules' => fn ($r) => ['required', 'numeric', 'min:0', 'max:100',
+                        Rule::unique('taxes', 'rate')->where('name', request('name'))->ignore($r)]],
+                    'description' => ['label' => 'Description', 'rules' => ['nullable', 'string', 'max:255'], 'wide' => true, 'hint' => 'e.g. Central GST for sales within West Bengal'],
+                    'is_default' => ['label' => 'Tick on new invoices', 'type' => 'checkbox', 'rules' => ['nullable']],
+                    'is_active' => ['label' => 'Active', 'type' => 'checkbox', 'rules' => ['nullable']],
+                ],
+                'defaults' => ['is_active' => true],
+            ],
+            'clients' => [
+                'model' => Client::class, 'title' => 'Clients', 'singular' => 'Client', 'modal' => true,
+                'search' => 'name', 'order' => ['name' => 'asc'],
+                'guard' => ['invoices' => 'invoices (mark the client inactive instead)'],
+                'columns' => [
+                    'name' => 'Name', 'code' => 'Code', 'contact_person' => 'Contact person',
+                    'email' => 'Email', 'phone' => 'Phone', 'city' => 'City', 'status' => 'Status',
+                ],
+                'fields' => [
+                    'name' => ['label' => 'Name', 'rules' => ['required', 'string', 'max:255']],
+                    'code' => ['label' => 'Code', 'rules' => fn ($r) => ['required', 'string', 'max:50', Rule::unique('clients', 'code')->ignore($r)]],
+                    'contact_person' => ['label' => 'Contact person', 'rules' => ['nullable', 'string', 'max:255']],
+                    'email' => ['label' => 'Email', 'type' => 'email', 'rules' => ['nullable', 'email', 'max:255']],
+                    'phone' => ['label' => 'Phone', 'rules' => ['nullable', 'string', 'max:30']],
+                    'website' => ['label' => 'Website', 'type' => 'url', 'rules' => ['nullable', 'url', 'max:255'], 'hint' => 'Include https://'],
+                    'tax_id' => ['label' => 'GSTIN / Tax ID', 'rules' => ['nullable', 'string', 'max:50']],
+                    'address' => ['label' => 'Address', 'rules' => ['nullable', 'string', 'max:255'], 'wide' => true],
+                    'city' => ['label' => 'City', 'rules' => ['nullable', 'string', 'max:100']],
+                    'country' => ['label' => 'Country', 'rules' => ['nullable', 'string', 'max:100']],
+                    'status' => ['label' => 'Status', 'type' => 'select', 'options' => fn () => ['active' => 'Active', 'inactive' => 'Inactive'], 'rules' => ['required', 'in:active,inactive']],
+                    'notes' => ['label' => 'Notes', 'type' => 'textarea', 'rules' => ['nullable', 'string', 'max:5000'], 'wide' => true],
+                ],
+                'defaults' => ['status' => 'active', 'country' => 'India'],
             ],
         ];
     }

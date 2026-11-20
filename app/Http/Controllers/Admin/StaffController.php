@@ -229,11 +229,7 @@ class StaffController extends AdminController
 
     private function nextEmployeeCode(): string
     {
-        $codes = Staff::orderBy('id')->pluck('employee_code')->filter();
-        $max = $codes->map(fn ($c) => (int) preg_replace('/\D/', '', (string) $c))->max() ?? 0;
-        $prefix = preg_replace('/\d+$/', '', (string) $codes->last()) ?: 'EMP';
-
-        return $prefix.str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+        return Staff::nextEmployeeCode();
     }
 
     /** @return array<string, mixed> */

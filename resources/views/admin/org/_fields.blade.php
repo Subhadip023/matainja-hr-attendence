@@ -23,6 +23,9 @@
                             <option value="{{ $optValue }}" @selected((string) $value === (string) $optValue)>{{ $optLabel }}</option>
                         @endforeach
                     </select>
+                @elseif ($type === 'textarea')
+                    <textarea id="{{ $id }}" name="{{ $name }}" rows="3"
+                              class="{{ $errors->has($name) ? 'is-invalid' : '' }}">{{ $value }}</textarea>
                 @else
                     <input id="{{ $id }}" type="{{ $type }}" name="{{ $name }}" value="{{ $value }}"
                            @isset($field['step']) step="{{ $field['step'] }}" @endisset

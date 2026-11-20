@@ -9,9 +9,7 @@ use App\Models\ExpenseCategory;
 use App\Models\LeaveType;
 use App\Models\MeetingRoom;
 use App\Models\Shift;
-use App\Models\Staff;
 use App\Models\TicketCategory;
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -20,7 +18,9 @@ class DatabaseSeeder extends Seeder
     use WithoutModelEvents;
 
     /**
-     * Seed the application's database.
+     * Reference data (roles, branch, departments, leave types, taxes, ...) is
+     * safe to run on any server: it only adds what is missing. Demo logins and
+     * demo invoices are added only in local/testing (see DemoData).
      */
     public function run(): void
     {
@@ -31,8 +31,8 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Head Office', 'address' => 'Kolkata', 'timezone' => 'Asia/Kolkata']
         );
 
-        $department = Department::firstOrCreate(['code' => 'OPS'], ['name' => 'Operations']);
-        $hrDept = Department::firstOrCreate(['code' => 'HR'], ['name' => 'Human Resources']);
+        Department::firstOrCreate(['code' => 'OPS'], ['name' => 'Operations']);
+        Department::firstOrCreate(['code' => 'HR'], ['name' => 'Human Resources']);
 
         Designation::firstOrCreate(['title' => 'Office Manager'], ['level' => 5]);
         Designation::firstOrCreate(['title' => 'Executive'], ['level' => 2]);
@@ -64,40 +64,13 @@ class DatabaseSeeder extends Seeder
             ['branch_id' => $branch->id, 'capacity' => 10]
         );
 
-        // Demo login accounts — password: password
-        $accounts = [
-            ['name' => 'Super Admin', 'email' => 'admin@example.com', 'role' => 'Super Admin'],
-            ['name' => 'HR Admin', 'email' => 'hr@example.com', 'role' => 'HR Admin'],
-            ['name' => 'Manager User', 'email' => 'manager@example.com', 'role' => 'Manager'],
-            ['name' => 'Employee User', 'email' => 'employee@example.com', 'role' => 'Employee'],
-        ];
+        // Company details for invoices (only empty values are filled) and GST rates.
+        $this->call(CompanySettingSeeder::class);
+        $this->call(TaxSeeder::class);
 
-        $manager = null;
-        foreach ($accounts as $i => $account) {
-            $user = User::firstOrCreate(
-                ['email' => $account['email']],
-                ['name' => $account['name'], 'password' => 'password']
-            );
-            $user->assignRole($account['role']);
-
-            Staff::firstOrCreate(
-                ['user_id' => $user->id],
-                [
-                    'employee_code' => 'EMP-'.str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT),
-                    'first_name' => explode(' ', $account['name'])[0],
-                    'last_name' => explode(' ', $account['name'])[1] ?? '',
-                    'email' => $account['email'],
-                    'department_id' => $account['role'] === 'HR Admin' ? $hrDept->id : $department->id,
-                    'branch_id' => $branch->id,
-                    'manager_id' => $manager?->id,
-                    'joining_date' => '2026-01-01',
-                    'employment_status' => 'active',
-                ]
-            );
-
-            if ($account['role'] === 'Manager') {
-                $manager = Staff::where('user_id', $user->id)->first();
-            }
-        }
+        // Demo logins (password: password) and demo clients/invoices.
+        // Both skip themselves on live servers — see DemoData.
+        $this->call(DemoUserSeeder::class);
+        $this->call(InvoiceSeeder::class);
     }
 }

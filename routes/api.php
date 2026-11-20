@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BranchController;
 use App\Http\Controllers\Api\V1\BreakController;
 use App\Http\Controllers\Api\V1\CalendarController;
+use App\Http\Controllers\Api\V1\ClientController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DesignationController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\ExpenseController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\HolidayController;
+use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\LeaveController;
 use App\Http\Controllers\Api\V1\MeetingController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -24,6 +26,7 @@ use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\ShiftAssignmentController;
 use App\Http\Controllers\Api\V1\ShiftController;
 use App\Http\Controllers\Api\V1\StaffController;
+use App\Http\Controllers\Api\V1\TaxController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\TicketController;
 use App\Http\Controllers\Api\V1\WfhController;
@@ -180,6 +183,29 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::patch('/assets/{asset}', [AssetController::class, 'update'])->middleware('role:HR Admin,Super Admin')->name('assets.update');
         Route::post('/assets/{asset}/assign', [AssetController::class, 'assign'])->middleware('role:HR Admin,Super Admin')->name('assets.assign');
         Route::post('/assets/{asset}/return', [AssetController::class, 'returnAsset'])->middleware('role:HR Admin,Super Admin')->name('assets.return');
+
+        // Clients
+        Route::get('/clients', [ClientController::class, 'index'])->middleware('role:Manager,HR Admin,Super Admin')->name('clients.index');
+        Route::post('/clients', [ClientController::class, 'store'])->middleware('role:HR Admin,Super Admin')->name('clients.store');
+        Route::get('/clients/{client}', [ClientController::class, 'show'])->middleware('role:Manager,HR Admin,Super Admin')->name('clients.show');
+        Route::match(['put', 'patch'], '/clients/{client}', [ClientController::class, 'update'])->middleware('role:HR Admin,Super Admin')->name('clients.update');
+        Route::delete('/clients/{client}', [ClientController::class, 'destroy'])->middleware('role:HR Admin,Super Admin')->name('clients.destroy');
+
+        // Tax rates that can be applied to invoices
+        Route::get('/taxes', [TaxController::class, 'index'])->middleware('role:Manager,HR Admin,Super Admin')->name('taxes.index');
+        Route::post('/taxes', [TaxController::class, 'store'])->middleware('role:HR Admin,Super Admin')->name('taxes.store');
+        Route::get('/taxes/{tax}', [TaxController::class, 'show'])->middleware('role:Manager,HR Admin,Super Admin')->name('taxes.show');
+        Route::match(['put', 'patch'], '/taxes/{tax}', [TaxController::class, 'update'])->middleware('role:HR Admin,Super Admin')->name('taxes.update');
+        Route::delete('/taxes/{tax}', [TaxController::class, 'destroy'])->middleware('role:HR Admin,Super Admin')->name('taxes.destroy');
+
+        // Invoices (billed to clients)
+        Route::get('/invoices', [InvoiceController::class, 'index'])->middleware('role:Manager,HR Admin,Super Admin')->name('invoices.index');
+        Route::post('/invoices', [InvoiceController::class, 'store'])->middleware('role:HR Admin,Super Admin')->name('invoices.store');
+        Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->middleware('role:Manager,HR Admin,Super Admin')->name('invoices.show');
+        Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->middleware('role:Manager,HR Admin,Super Admin')->name('invoices.pdf');
+        Route::match(['put', 'patch'], '/invoices/{invoice}', [InvoiceController::class, 'update'])->middleware('role:HR Admin,Super Admin')->name('invoices.update');
+        Route::post('/invoices/{invoice}/status', [InvoiceController::class, 'status'])->middleware('role:HR Admin,Super Admin')->name('invoices.status');
+        Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy'])->middleware('role:HR Admin,Super Admin')->name('invoices.destroy');
 
         // Helpdesk
         Route::get('/ticket-categories', [TicketController::class, 'categories'])->name('tickets.categories');
