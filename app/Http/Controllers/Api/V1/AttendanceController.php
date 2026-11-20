@@ -57,7 +57,7 @@ class AttendanceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $query = Attendance::with(['staff:id,first_name,last_name,name,branch_id', 'staff.branch', 'events'])->latest('work_date');
+        $query = Attendance::with(['staff:id,first_name,last_name,name,branch_id', 'staff.branch', 'events' => fn ($q) => $q->whereIn('event_type', ['check_in', 'check_out'])])->latest('work_date');
 
         // Scope: employees see own, managers see team, HR/admin see all.
         if ($user->hasRole('Manager') && ! $user->isAdmin()) {
@@ -125,7 +125,7 @@ class AttendanceController extends Controller
             ? $this->service->workDate($user->staff, now()->toImmutable())
             : now()->toDateString();
 
-        $query = Attendance::with(['staff:id,first_name,last_name,name,branch_id', 'staff.branch', 'events'])->where('work_date', $workDate);
+        $query = Attendance::with(['staff:id,first_name,last_name,name,branch_id', 'staff.branch', 'events' => fn ($q) => $q->whereIn('event_type', ['check_in', 'check_out'])])->where('work_date', $workDate);
 
         if ($staffIds !== null) {
             $query->whereIn('staff_id', $staffIds);

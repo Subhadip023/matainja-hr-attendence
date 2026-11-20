@@ -34,7 +34,8 @@ class AttendanceResource extends JsonResource
             'work_mode' => $this->status === 'wfh' ? 'wfh' : 'office',
             'check_in_location' => $this->whenLoaded('events', fn () => $this->punchLocation('check_in')),
             'check_out_location' => $this->whenLoaded('events', fn () => $this->punchLocation('check_out')),
-            'events' => $this->whenLoaded('events', fn () => $this->events->map(fn ($e) => [
+            // Full punch history only for a single record; lists stay small.
+            'events' => $this->when($request->routeIs('api.v1.attendance.show') && $this->relationLoaded('events'), fn () => $this->events->map(fn ($e) => [
                 'id' => $e->id,
                 'event_type' => $e->event_type,
                 'occurred_at' => $e->occurred_at?->toIso8601String(),
