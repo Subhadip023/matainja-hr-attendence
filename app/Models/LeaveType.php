@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\FlushesReferenceCache;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LeaveType extends Model
 {
@@ -19,5 +20,10 @@ class LeaveType extends Model
             'paid' => 'boolean',
             'requires_document' => 'boolean',
         ];
+    }
+
+    public function requests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class);
     }
 }

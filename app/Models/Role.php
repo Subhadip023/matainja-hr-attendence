@@ -13,4 +13,10 @@ class Role extends Model
     {
         return $this->belongsToMany(Permission::class, 'permission_role');
     }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
+            ->wherePivot('model_type', User::class);
+    }
 }
