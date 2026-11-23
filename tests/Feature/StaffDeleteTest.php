@@ -83,11 +83,54 @@ class StaffDeleteTest extends TestCase
 
         $this->from(route('admin.staff.index'))->delete(route('admin.staff.destroy', $staff))
             ->assertRedirect(route('admin.staff.index'))
-            ->assertSessionHas('error', "Can't delete Asha Roy: they have 1 attendance day, 1 leave request. Deleting would erase that history, so deactivate them instead.");
+            ->assertSessionHas('error', "Can't delete Asha Roy: they have 1 attendance day, 1 leave request. Deactivate them instead, or open their profile to permanently delete them along with that history.");
 
         $this->assertModelExists($staff);
         $this->assertModelExists($staff->user);
-        $this->get(route('admin.staff.edit', $staff))->assertOk()->assertSee("Can't be deleted", false)->assertDontSee('Delete employee</button>', false);
+        $this->get(route('admin.staff.edit', $staff))->assertOk()
+            ->assertSee('Force delete employee</button>', false)
+            ->assertDontSee('Delete employee</button>', false);
+    }
+
+    public function test_force_delete_with_wrong_confirmation_code_keeps_the_employee(): void
+    {
+        $staff = $this->employeeWithLogin();
+        Attendance::create(['staff_id' => $staff->id, 'work_date' => '2026-11-20', 'status' => 'present']);
+
+        $this->delete(route('admin.staff.destroy', $staff), ['force' => 1, 'confirm_code' => 'EMP-999'])
+            ->assertSessionHas('error', 'Not deleted: type the employee code EMP-101 exactly to confirm.');
+
+        $this->assertModelExists($staff);
+        $this->assertDatabaseCount('attendance', 1);
+    }
+
+    public function test_force_delete_with_confirmation_erases_the_employee_and_their_history(): void
+    {
+        $staff = $this->employeeWithLogin();
+        $user = $staff->user;
+        Attendance::create(['staff_id' => $staff->id, 'work_date' => '2026-11-20', 'status' => 'present']);
+        $leaveType = LeaveType::create(['name' => 'Casual', 'code' => 'CL', 'paid' => true]);
+        LeaveRequest::create(['staff_id' => $staff->id, 'leave_type_id' => $leaveType->id, 'from_date' => '2026-11-24', 'to_date' => '2026-11-24', 'total_days' => 1]);
+
+        $this->delete(route('admin.staff.destroy', $staff), ['force' => 1, 'confirm_code' => 'EMP-101'])
+            ->assertRedirect(route('admin.staff.index'))
+            ->assertSessionHas('success', 'Asha Roy was deleted, along with their app login.');
+
+        $this->assertModelMissing($staff);
+        $this->assertModelMissing($user);
+        $this->assertDatabaseCount('attendance', 0);
+        $this->assertDatabaseCount('leave_requests', 0);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'staff.force_deleted']);
+    }
+
+    public function test_admin_cannot_force_delete_their_own_employee_record(): void
+    {
+        $own = Staff::create(['user_id' => $this->admin->id, 'employee_code' => 'EMP-001', 'first_name' => 'Me']);
+        Attendance::create(['staff_id' => $own->id, 'work_date' => '2026-11-20', 'status' => 'present']);
+
+        $this->delete(route('admin.staff.destroy', $own), ['force' => 1, 'confirm_code' => 'EMP-001'])
+            ->assertSessionHas('error', 'You cannot delete your own account.');
+        $this->assertModelExists($own);
     }
 
     public function test_login_that_approved_other_peoples_leave_blocks_deletion(): void

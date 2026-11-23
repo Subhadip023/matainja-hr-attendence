@@ -153,10 +153,11 @@ class StaffController extends AdminController
     }
 
     /**
-     * Permanently delete an employee and their app login. Only allowed when they
-     * have no history (see Staff::deletionBlockers()); otherwise deactivate them.
+     * Permanently delete an employee and their app login. When they have history
+     * (see Staff::deletionBlockers()) the admin must ask for a force delete and type
+     * the employee code to confirm; the history is then erased with them.
      */
-    public function destroy(Staff $staff): RedirectResponse
+    public function destroy(Request $request, Staff $staff): RedirectResponse
     {
         if ($staff->user_id && $staff->user_id === auth()->id()) {
             return back()->with('error', 'You cannot delete your own account.');
@@ -166,10 +167,16 @@ class StaffController extends AdminController
         if ($blockers !== []) {
             $list = implode(', ', $blockers);
 
-            return back()->with('error', "Can't delete {$staff->full_name}: they have {$list}. Deleting would erase that history, so deactivate them instead.");
+            if (! $request->boolean('force')) {
+                return back()->with('error', "Can't delete {$staff->full_name}: they have {$list}. Deactivate them instead, or open their profile to permanently delete them along with that history.");
+            }
+
+            if (trim((string) $request->input('confirm_code')) !== (string) $staff->employee_code) {
+                return back()->with('error', "Not deleted: type the employee code {$staff->employee_code} exactly to confirm.");
+            }
         }
 
-        $before = $staff->load('user')->toArray();
+        $before = [...$staff->load('user')->toArray(), 'erased_history' => $blockers];
         $name = $staff->full_name;
 
         DB::transaction(function () use ($staff) {
@@ -178,7 +185,7 @@ class StaffController extends AdminController
             Team::where('manager_id', $staff->id)->update(['manager_id' => null]);
 
             $user = $staff->user;
-            $staff->delete(); // shift assignments and leave balances go with it; reports lose their manager
+            $staff->delete(); // its history cascades (attendance, leave, claims...); reports lose their manager
             if ($user) {
                 $user->tokens()->delete(); // signed out of the app
                 $user->roles()->detach();
@@ -186,7 +193,7 @@ class StaffController extends AdminController
             }
         });
 
-        AuditLog::record('staff.deleted', null, $before);
+        AuditLog::record($blockers === [] ? 'staff.deleted' : 'staff.force_deleted', null, $before);
 
         return redirect()->route('admin.staff.index')->with('success', "{$name} was deleted".($before['user'] ? ', along with their app login.' : '.'));
     }

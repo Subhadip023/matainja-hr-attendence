@@ -188,11 +188,22 @@
                         <button class="btn danger" type="submit">Delete employee</button>
                     </form>
                 @else
-                    <p class="muted" style="margin:0">
-                        Can't be deleted: {{ $staff->full_name }} has
-                        {{ implode(', ', $blockers) }}.
-                        Deleting would erase that history. Use <strong>Deactivate</strong> on the Employees list instead; it signs them out and keeps their records.
+                    <p style="margin:0 0 8px">
+                        {{ $staff->full_name }} has <strong>{{ implode(', ', $blockers) }}</strong>.
+                        Normally you should use <strong>Deactivate</strong> on the Employees list; it signs them out and keeps their records.
                     </p>
+                    <p style="margin:0 0 12px">
+                        To remove them anyway (for example a test account), force delete. This permanently erases {{ $staff->full_name }}{{ $hasLogin ? ', their app login' : '' }} and all of the history above. It can't be undone.
+                    </p>
+                    <form method="POST" action="{{ route('admin.staff.destroy', $staff) }}" data-confirm="Force delete {{ $staff->full_name }} and erase {{ implode(', ', $blockers) }}? This can't be undone.">
+                        @csrf @method('DELETE')
+                        <input type="hidden" name="force" value="1">
+                        <div class="field" style="max-width:320px;margin-bottom:12px">
+                            <label for="confirm_code">Type <strong>{{ $staff->employee_code }}</strong> to confirm</label>
+                            <input id="confirm_code" type="text" name="confirm_code" autocomplete="off" required>
+                        </div>
+                        <button class="btn danger" type="submit">Force delete employee</button>
+                    </form>
                 @endif
             </div>
         </div>
