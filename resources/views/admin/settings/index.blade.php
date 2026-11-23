@@ -76,7 +76,7 @@
                             @endif
                         </div>
                     @endforeach
-                    <div class="hint wide">Printed at the top of every invoice. Numbers look like PREFIX-{{ now()->year }}-0001.</div>
+                    <div class="hint wide">Printed at the top of every invoice. Numbers follow GST rules and restart every April, e.g. PREFIX/{{ \App\Services\InvoiceService::financialYear(\Carbon\CarbonImmutable::today()) }}/0001. The prefix can be up to {{ \App\Services\InvoiceService::PREFIX_MAX_LENGTH }} letters or digits.</div>
                 </div>
             </div>
         </div>

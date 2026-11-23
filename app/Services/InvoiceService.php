@@ -24,6 +24,12 @@ class InvoiceService
 
     public const SETTING_DUE_DAYS = 'invoice.due_days';
 
+    /** Characters GST allows in an invoice number. */
+    public const NUMBER_PATTERN = '/^[A-Za-z0-9\/-]+$/';
+
+    /** Longest prefix that keeps PREFIX/26-27/0001 within GST's 16 characters. */
+    public const PREFIX_MAX_LENGTH = 5;
+
     /** Path of the organisation logo on the private "local" disk. */
     public const SETTING_LOGO = 'company.logo';
 
@@ -51,10 +57,16 @@ class InvoiceService
 
         return [
             'client_id' => [$required, 'integer', Rule::exists('clients', 'id')],
-            'number' => ['nullable', 'string', 'max:50', Rule::unique('invoices', 'number')->ignore($invoice)],
+            // GST (CGST Rule 46(b)): up to 16 characters; letters, digits, "-" and "/" only.
+            'number' => ['nullable', 'string', 'max:16', 'regex:'.self::NUMBER_PATTERN, Rule::unique('invoices', 'number')->ignore($invoice)],
             'issue_date' => [$required, 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:issue_date'],
             'currency' => ['sometimes', 'string', 'size:3'],
+            'payment_mode' => ['nullable', 'string', 'max:50'],
+            // Flat amount off the subtotal, before tax. Can't be more than the subtotal.
+            'discount' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
+            // Flat fee added to the total after tax.
+            'commission_fee' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'terms' => ['nullable', 'string', 'max:5000'],
             'items' => [$required, 'array', 'min:1', 'max:200'],
@@ -80,6 +92,11 @@ class InvoiceService
             unset($data['items'], $data['tax_ids']);
             $isNew = ! $invoice->exists;
 
+            foreach (['discount', 'commission_fee'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $data[$field] = round((float) $data[$field], 2);
+                }
+            }
             if (! empty($data['currency'])) {
                 $data['currency'] = strtoupper($data['currency']);
             }
@@ -152,20 +169,29 @@ class InvoiceService
         }
     }
 
-    /** Subtotal = sum of lines; each tax = subtotal x rate. */
+    /**
+     * Subtotal = sum of lines; taxable value = subtotal - discount;
+     * each tax = taxable value x rate; total = taxable value + taxes + commission fee.
+     */
     public function recalculate(Invoice $invoice): void
     {
         $subtotal = round((float) $invoice->items()->sum('amount'), 2);
+        $discount = round((float) $invoice->discount, 2);
+        if ($discount > $subtotal) {
+            throw ValidationException::withMessages(['discount' => 'The discount can\'t be more than the subtotal ('.number_format($subtotal, 2).').']);
+        }
+        $taxable = round($subtotal - $discount, 2);
+
         $taxTotal = 0.0;
         foreach ($invoice->taxes()->get() as $tax) {
-            $amount = round($subtotal * (float) $tax->rate / 100, 2);
+            $amount = round($taxable * (float) $tax->rate / 100, 2);
             $tax->update(['amount' => $amount]);
             $taxTotal += $amount;
         }
         $invoice->forceFill([
             'subtotal' => $subtotal,
             'tax_total' => round($taxTotal, 2),
-            'total' => round($subtotal + $taxTotal, 2),
+            'total' => round($taxable + $taxTotal + (float) $invoice->commission_fee, 2),
         ])->save();
     }
 
@@ -194,15 +220,26 @@ class InvoiceService
         return $invoice;
     }
 
-    /** Next sequential number for the issue year, e.g. INV-2026-0007. */
+    /**
+     * Next consecutive number in the issue date's Indian financial year
+     * (April–March), e.g. INV/26-27/0007. The series restarts every April.
+     */
     public function nextNumber(CarbonImmutable $issueDate): string
     {
-        $prefix = ($this->setting(self::SETTING_PREFIX) ?: 'INV').'-'.$issueDate->year.'-';
+        $prefix = ($this->setting(self::SETTING_PREFIX) ?: 'INV').'/'.self::financialYear($issueDate).'/';
         $last = Invoice::where('number', 'like', $prefix.'%')->lockForUpdate()->pluck('number')
             ->map(fn ($n) => (int) substr($n, strlen($prefix)))
             ->max() ?? 0;
 
         return $prefix.str_pad((string) ($last + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    /** Short financial year label, e.g. 2026-11-23 => "26-27", 2027-02-10 => "26-27". */
+    public static function financialYear(CarbonImmutable $date): string
+    {
+        $start = $date->month >= 4 ? $date->year : $date->year - 1;
+
+        return sprintf('%02d-%02d', $start % 100, ($start + 1) % 100);
     }
 
     public function defaultDueDate(CarbonImmutable $issueDate): CarbonImmutable
@@ -248,6 +285,50 @@ class InvoiceService
             'invoice' => $invoice->loadMissing(['client', 'items', 'taxes']),
             'company' => $this->company(),
         ])->setPaper('a4');
+    }
+
+    /**
+     * The amount in words using the Indian system (lakh, crore), e.g.
+     * 160480 => "One Lakh Sixty Thousand Four Hundred and Eighty Rupees Only".
+     */
+    public function amountInWords(float $amount, string $currency = 'INR'): string
+    {
+        $cents = (int) round(abs($amount) * 100);
+        $whole = intdiv($cents, 100);
+        $fraction = $cents % 100;
+        [$major, $minor] = strtoupper($currency) === 'INR' ? ['Rupees', 'Paise'] : [strtoupper($currency), 'Cents'];
+
+        $words = $this->integerToWords($whole).' '.$major;
+        if ($fraction > 0) {
+            $words .= ' and '.$this->integerToWords($fraction).' '.$minor;
+        }
+
+        return $words.' Only';
+    }
+
+    private function integerToWords(int $number): string
+    {
+        $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+            'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+        $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+        if ($number === 0) {
+            return 'Zero';
+        }
+
+        $parts = [];
+        foreach ([10000000 => 'Crore', 100000 => 'Lakh', 1000 => 'Thousand', 100 => 'Hundred'] as $divisor => $name) {
+            if ($number >= $divisor) {
+                $parts[] = $this->integerToWords(intdiv($number, $divisor)).' '.$name;
+                $number %= $divisor;
+            }
+        }
+        if ($number > 0) {
+            $tail = $number < 20 ? $ones[$number] : trim($tens[intdiv($number, 10)].' '.$ones[$number % 10]);
+            $parts[] = $parts === [] ? $tail : 'and '.$tail;
+        }
+
+        return implode(' ', $parts);
     }
 
     /** Safe download name, e.g. INV-2026-0001.pdf. */

@@ -11,6 +11,7 @@
             <p>Everyone in the organisation, with their department, manager and app access.</p>
         </div>
         <div class="actions">
+            <a class="btn" href="{{ route('admin.staff.import') }}">Import CSV</a>
             <a class="btn primary" href="{{ route('admin.staff.create') }}">+ Add employee</a>
         </div>
     </div>
@@ -55,7 +56,7 @@
                                     <span class="sub">{{ $s->designation?->title ?? $s->position ?? '' }} {{ $s->email }}</span></div>
                             </div>
                         </td>
-                        <td class="mono">{{ $s->employee_code }}</td>
+                        <td class="mono">{!! $s->employee_code ? e($s->employee_code) : '<span class="muted">—</span>' !!}</td>
                         <td>{{ $s->department?->name ?? '—' }}</td>
                         <td>{{ $s->branch?->name ?? '—' }}</td>
                         <td>{{ $s->manager?->full_name ?? '—' }}</td>

@@ -38,8 +38,9 @@
                 </div>
                 <div class="field">
                     <label for="number">Invoice number</label>
-                    <input id="number" type="text" name="number" value="{{ $v('number') }}" placeholder="{{ $nextNumber ?? '' }}" maxlength="50">
-                    @unless ($invoice->exists)<div class="hint">Leave blank to use {{ $nextNumber }}.</div>@endunless
+                    <input id="number" type="text" name="number" value="{{ $v('number') }}" placeholder="{{ $nextNumber ?? '' }}" maxlength="16" pattern="[A-Za-z0-9/\-]+" title="Up to 16 letters, digits, - or /">
+                    @unless ($invoice->exists)<div class="hint">Leave blank to use {{ $nextNumber }}. GST allows up to 16 letters, digits, "-" and "/".</div>@endunless
+                    @error('number')<div class="error">{{ $message }}</div>@enderror
                 </div>
                 <div class="field">
                     <label for="issue_date">Issue date *</label>
@@ -52,6 +53,14 @@
                 <div class="field">
                     <label for="currency">Currency</label>
                     <input id="currency" type="text" name="currency" value="{{ $v('currency') ?: 'INR' }}" maxlength="3" style="text-transform:uppercase">
+                </div>
+                <div class="field">
+                    <label for="payment_mode">Payment mode</label>
+                    <input id="payment_mode" type="text" name="payment_mode" value="{{ $v('payment_mode') }}" maxlength="50" list="payment-modes" placeholder="e.g. NEFT">
+                    <datalist id="payment-modes">
+                        @foreach (['NEFT', 'RTGS', 'IMPS', 'UPI', 'Bank transfer', 'Cheque', 'Cash', 'Card', 'PayPal'] as $mode)<option value="{{ $mode }}">@endforeach
+                    </datalist>
+                    @error('payment_mode')<div class="error">{{ $message }}</div>@enderror
                 </div>
             </div>
         </div>
@@ -77,11 +86,27 @@
                     <tfoot>
                     <tr><td colspan="5"><button type="button" class="btn sm" id="add-line">+ Add line</button></td></tr>
                     <tr><td colspan="3" class="right muted">Subtotal</td><td class="right nowrap" id="t-sub">0.00</td><td></td></tr>
+                    <tr>
+                        <td colspan="3" class="right muted"><label for="discount">Discount</label></td>
+                        <td class="right">
+                            <input id="discount" type="number" name="discount" value="{{ $v('discount') ?: '' }}" step="0.01" min="0" class="right" placeholder="0.00" style="max-width:140px">
+                            @error('discount')<div class="error">{{ $message }}</div>@enderror
+                        </td>
+                        <td></td>
+                    </tr>
                     @foreach ($taxes as $tax)
                         <tr data-tax-row="{{ $tax->id }}" @unless (in_array($tax->id, $selectedTaxIds, true)) hidden @endunless>
                             <td colspan="3" class="right muted">{{ $tax->label }}</td><td class="right nowrap" data-tax-amount>0.00</td><td></td>
                         </tr>
                     @endforeach
+                    <tr>
+                        <td colspan="3" class="right muted"><label for="commission_fee">Commission fee</label></td>
+                        <td class="right">
+                            <input id="commission_fee" type="number" name="commission_fee" value="{{ $v('commission_fee') ?: '' }}" step="0.01" min="0" class="right" placeholder="0.00" style="max-width:140px">
+                            @error('commission_fee')<div class="error">{{ $message }}</div>@enderror
+                        </td>
+                        <td></td>
+                    </tr>
                     <tr><td colspan="3" class="right"><strong>Total</strong></td><td class="right nowrap"><strong id="t-total">0.00</strong></td><td></td></tr>
                     </tfoot>
                 </table>
@@ -108,7 +133,7 @@
                                 </optgroup>
                             @endforeach
                         </select>
-                        <div class="hint">Each tax is worked out on the subtotal. Same state as you: CGST + SGST. Another state: IGST. Export: none.</div>
+                        <div class="hint">Each tax is worked out on the subtotal after any discount. Same state as you: CGST + SGST. Another state: IGST. Export: none.</div>
                     </div>
                 @endif
             </div>
@@ -181,15 +206,16 @@
             tr.querySelector('[data-amount]').textContent = fmt(amount);
         });
         sub = Math.round(sub * 100) / 100;
+        var taxable = Math.max(0, Math.round((sub - num(document.getElementById('discount'))) * 100) / 100);
         document.querySelectorAll('#tax_ids option').forEach(function (opt) {
             var row = document.querySelector('[data-tax-row="' + opt.value + '"]');
-            var amount = Math.round(sub * parseFloat(opt.getAttribute('data-rate'))) / 100;
+            var amount = Math.round(taxable * parseFloat(opt.getAttribute('data-rate'))) / 100;
             row.hidden = !opt.selected;
             row.querySelector('[data-tax-amount]').textContent = fmt(amount);
             if (opt.selected) tax += amount;
         });
         document.getElementById('t-sub').textContent = fmt(sub);
-        document.getElementById('t-total').textContent = fmt(sub + tax);
+        document.getElementById('t-total').textContent = fmt(taxable + tax + num(document.getElementById('commission_fee')));
     }
 
     // Tax picker: Select2 when it loaded from the CDN, otherwise the plain multi-select still works.
@@ -223,6 +249,8 @@
         renumber(); recalc();
     });
     body.addEventListener('input', recalc);
+    document.getElementById('discount').addEventListener('input', recalc);
+    document.getElementById('commission_fee').addEventListener('input', recalc);
     recalc();
 })();
 </script>

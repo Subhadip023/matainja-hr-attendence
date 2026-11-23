@@ -24,6 +24,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Employees
         Route::get('/employees', [Admin\StaffController::class, 'index'])->name('staff.index');
         Route::get('/employees/create', [Admin\StaffController::class, 'create'])->name('staff.create');
+        Route::get('/employees/import', [Admin\StaffImportController::class, 'create'])->name('staff.import');
+        Route::post('/employees/import', [Admin\StaffImportController::class, 'upload'])->name('staff.import.upload');
+        Route::get('/employees/import/preview', [Admin\StaffImportController::class, 'preview'])->name('staff.import.preview');
+        Route::post('/employees/import/confirm', [Admin\StaffImportController::class, 'store'])->name('staff.import.store');
+        Route::get('/employees/import/result', [Admin\StaffImportController::class, 'result'])->name('staff.import.result');
+        Route::get('/employees/import/logins.csv', [Admin\StaffImportController::class, 'logins'])->name('staff.import.logins');
+        Route::get('/employees/import/template.csv', [Admin\StaffImportController::class, 'template'])->name('staff.import.template');
         Route::post('/employees', [Admin\StaffController::class, 'store'])->name('staff.store');
         Route::get('/employees/{staff}/edit', [Admin\StaffController::class, 'edit'])->name('staff.edit');
         Route::put('/employees/{staff}', [Admin\StaffController::class, 'update'])->name('staff.update');

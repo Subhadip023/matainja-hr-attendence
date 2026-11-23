@@ -48,6 +48,7 @@
                 <tr><td>Invoice no.</td><td><strong>{{ $invoice->number }}</strong></td></tr>
                 <tr><td>Issue date</td><td>{{ $invoice->issue_date?->format('d M Y') }}</td></tr>
                 @if ($invoice->due_date)<tr><td>Due date</td><td>{{ $invoice->due_date->format('d M Y') }}</td></tr>@endif
+                @if ($invoice->payment_mode)<tr><td>Payment mode</td><td>{{ $invoice->payment_mode }}</td></tr>@endif
             </table>
             @if (in_array($invoice->status, ['paid', 'cancelled', 'draft'], true))
                 <div style="margin-top:8px"><span class="stamp {{ $invoice->status }}">{{ $invoice->status }}{{ $invoice->status === 'paid' && $invoice->paid_at ? ' · '.$invoice->paid_at->format('d M Y') : '' }}</span></div>
@@ -82,9 +83,11 @@
 
     <table class="totals">
         <tr><td>Subtotal</td><td class="r">{{ $money($invoice->subtotal) }}</td></tr>
+        <tr><td>Discount</td><td class="r">{{ (float) $invoice->discount > 0 ? '− ' : '' }}{{ $money($invoice->discount) }}</td></tr>
         @foreach ($taxes as $tax)
             <tr><td>{{ $tax->label }}</td><td class="r">{{ $money($tax->amount) }}</td></tr>
         @endforeach
+        <tr><td>Commission fee</td><td class="r">{{ $money($invoice->commission_fee) }}</td></tr>
         <tr class="grand"><td>Total</td><td class="r">{{ $money($invoice->total) }}</td></tr>
         @if ($invoice->status === 'paid')
             <tr><td>Paid</td><td class="r">{{ $money($invoice->total) }}</td></tr>

@@ -12,8 +12,8 @@ class Invoice extends Model
     public const STATUSES = ['draft', 'sent', 'paid', 'cancelled'];
 
     protected $fillable = [
-        'client_id', 'number', 'issue_date', 'due_date', 'currency', 'status',
-        'subtotal', 'tax_total', 'total', 'paid_at', 'payment_reference',
+        'client_id', 'number', 'issue_date', 'due_date', 'currency', 'payment_mode', 'status',
+        'subtotal', 'discount', 'tax_total', 'commission_fee', 'total', 'paid_at', 'payment_reference',
         'notes', 'terms', 'created_by',
     ];
 
@@ -26,6 +26,8 @@ class Invoice extends Model
             'due_date' => 'date:Y-m-d',
             'paid_at' => 'date:Y-m-d',
             'subtotal' => 'decimal:2',
+            'discount' => 'decimal:2',
+            'commission_fee' => 'decimal:2',
             'tax_total' => 'decimal:2',
             'total' => 'decimal:2',
         ];

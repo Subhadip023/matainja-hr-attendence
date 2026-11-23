@@ -38,7 +38,8 @@ class SettingController extends AdminController
             'invoicing.*' => ['nullable', 'string', 'max:2000'],
             // Form fields use "_" for "." (company.name -> invoicing[company_name]).
             'invoicing.invoice_due_days' => ['nullable', 'integer', 'min:0', 'max:365'],
-            'invoicing.invoice_prefix' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9\/_-]+$/'],
+            // GST invoice numbers: max 16 characters of letters, digits, "-" and "/".
+            'invoicing.invoice_prefix' => ['nullable', 'string', 'max:'.InvoiceService::PREFIX_MAX_LENGTH, 'regex:/^[A-Za-z0-9-]+$/'],
             // PNG/JPG only: the PDF engine can't draw WebP or SVG reliably.
             'company_logo' => ['nullable', 'file', 'image', 'mimes:png,jpg,jpeg', 'max:1024', 'dimensions:max_width=3000,max_height=3000'],
             'remove_logo' => ['nullable', 'boolean'],

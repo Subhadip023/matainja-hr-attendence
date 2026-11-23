@@ -111,6 +111,18 @@ class Staff extends Model
         return trim("{$this->first_name} {$this->last_name}") ?: ($this->name ?? '');
     }
 
+    /** "Asha Roy (M-140)", or just the name when there is no employee code. */
+    public function getNameWithCodeAttribute(): string
+    {
+        return $this->employee_code ? "{$this->full_name} ({$this->employee_code})" : $this->full_name;
+    }
+
+    /** What the admin types to confirm a force delete: the code, or the email when there is no code. */
+    public function deleteConfirmationValue(): string
+    {
+        return (string) ($this->employee_code ?: ($this->email ?: $this->id));
+    }
+
     /**
      * Records that would be lost if this employee (and their app login) were
      * deleted: the database removes them along with the employee or the user.

@@ -16,7 +16,7 @@
         </div>
         @if ($staff->exists)
             <div class="actions">
-                <a class="btn" href="{{ route('admin.attendance.index', ['q' => $staff->employee_code]) }}">Attendance</a>
+                <a class="btn" href="{{ route('admin.attendance.index', ['q' => $staff->employee_code ?: $staff->full_name]) }}">Attendance</a>
             </div>
         @endif
     </div>
@@ -54,8 +54,9 @@
                     <div class="card-head"><h2>Employment</h2></div>
                     <div class="card-body form-grid">
                         <div class="field">
-                            <label for="employee_code">Employee code *</label>
-                            <input id="employee_code" type="text" name="employee_code" value="{{ old('employee_code', $staff->employee_code ?? $nextCode) }}" required>
+                            <label for="employee_code">Employee code</label>
+                            <input id="employee_code" type="text" name="employee_code" value="{{ old('employee_code', $staff->employee_code ?? $nextCode) }}">
+                            @if ($staff->exists && ! $staff->employee_code)<div class="hint">No code yet. Add it when the ID card is issued.</div>@endif
                         </div>
                         <div class="field">
                             <label for="joining_date">Joining date</label>
@@ -112,7 +113,7 @@
                             <label for="manager_id">Reports to</label>
                             <select id="manager_id" name="manager_id">
                                 <option value="">—</option>
-                                @foreach ($managers as $m)<option value="{{ $m->id }}" @selected($v('manager_id') == $m->id)>{{ $m->full_name }} ({{ $m->employee_code }})</option>@endforeach
+                                @foreach ($managers as $m)<option value="{{ $m->id }}" @selected($v('manager_id') == $m->id)>{{ $m->name_with_code }}</option>@endforeach
                             </select>
                             <div class="hint">The manager approves their leave and WFH in the app.</div>
                         </div>
@@ -199,7 +200,7 @@
                         @csrf @method('DELETE')
                         <input type="hidden" name="force" value="1">
                         <div class="field" style="max-width:320px;margin-bottom:12px">
-                            <label for="confirm_code">Type <strong>{{ $staff->employee_code }}</strong> to confirm</label>
+                            <label for="confirm_code">Type <strong>{{ $staff->deleteConfirmationValue() }}</strong> to confirm</label>
                             <input id="confirm_code" type="text" name="confirm_code" autocomplete="off" required>
                         </div>
                         <button class="btn danger" type="submit">Force delete employee</button>

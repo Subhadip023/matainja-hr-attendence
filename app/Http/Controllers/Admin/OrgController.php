@@ -153,7 +153,7 @@ class OrgController extends AdminController
     private function resources(): array
     {
         $staffOptions = fn () => Staff::whereIn('employment_status', ['active', 'probation'])->orderBy('first_name')
-            ->get()->mapWithKeys(fn ($s) => [$s->id => "{$s->full_name} ({$s->employee_code})"])->all();
+            ->get()->mapWithKeys(fn ($s) => [$s->id => $s->name_with_code])->all();
 
         return [
             'branches' => [

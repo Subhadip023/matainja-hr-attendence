@@ -133,6 +133,36 @@ class StaffDeleteTest extends TestCase
         $this->assertModelExists($own);
     }
 
+    public function test_employee_without_a_code_is_force_deleted_by_typing_their_email(): void
+    {
+        $staff = $this->employeeWithLogin();
+        $staff->update(['employee_code' => null]);
+        Attendance::create(['staff_id' => $staff->id, 'work_date' => '2026-11-20', 'status' => 'present']);
+
+        $this->get(route('admin.staff.edit', $staff))->assertOk()->assertSee('Type <strong>'.$staff->email.'</strong> to confirm', false);
+
+        $this->delete(route('admin.staff.destroy', $staff), ['force' => 1, 'confirm_code' => ''])
+            ->assertSessionHas('error', "Not deleted: type the email {$staff->email} exactly to confirm.");
+        $this->assertModelExists($staff);
+
+        $this->delete(route('admin.staff.destroy', $staff), ['force' => 1, 'confirm_code' => $staff->email])
+            ->assertRedirect(route('admin.staff.index'));
+        $this->assertModelMissing($staff);
+    }
+
+    public function test_employee_can_be_saved_without_a_code(): void
+    {
+        $staff = $this->employeeWithLogin();
+
+        $this->put(route('admin.staff.update', $staff), [
+            'employee_code' => '', 'first_name' => 'Asha', 'last_name' => 'Roy',
+            'email' => $staff->email, 'employment_status' => 'active',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNull($staff->fresh()->employee_code);
+        $this->get(route('admin.staff.index'))->assertOk()->assertSee('Asha Roy');
+    }
+
     public function test_login_that_approved_other_peoples_leave_blocks_deletion(): void
     {
         $approver = $this->employeeWithLogin();

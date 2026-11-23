@@ -172,8 +172,10 @@ class StaffController extends AdminController
                     ->with('error', "{$staff->full_name} has {$list}. To delete them anyway, type their employee code below and force delete, or deactivate them instead to keep the history.");
             }
 
-            if (trim((string) $request->input('confirm_code')) !== (string) $staff->employee_code) {
-                return back()->with('error', "Not deleted: type the employee code {$staff->employee_code} exactly to confirm.");
+            if (trim((string) $request->input('confirm_code')) !== $staff->deleteConfirmationValue()) {
+                $what = $staff->employee_code ? 'employee code' : 'email';
+
+                return back()->with('error', "Not deleted: type the {$what} {$staff->deleteConfirmationValue()} exactly to confirm.");
             }
         }
 
@@ -213,7 +215,7 @@ class StaffController extends AdminController
         $userId = $staff?->user_id;
 
         return $request->validate([
-            'employee_code' => ['required', 'string', 'max:50', Rule::unique('staff', 'employee_code')->ignore($staff)],
+            'employee_code' => ['nullable', 'string', 'max:50', Rule::unique('staff', 'employee_code')->ignore($staff)],
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['nullable', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:255', Rule::unique('staff', 'email')->ignore($staff),

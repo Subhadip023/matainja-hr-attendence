@@ -8,6 +8,8 @@ use App\Models\Invoice;
 use App\Models\Tax;
 use App\Models\User;
 use App\Services\InvoiceService;
+use Carbon\CarbonImmutable;
+use Database\Seeders\CompanySettingSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\InvoiceSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -69,7 +71,7 @@ class InvoiceTest extends TestCase
 
         $this->postJson('/api/v1/invoices', $this->payload())
             ->assertCreated()
-            ->assertJsonPath('data.number', 'INV-2026-0001')
+            ->assertJsonPath('data.number', 'INV/26-27/0001')
             ->assertJsonPath('data.status', 'draft')
             ->assertJsonPath('data.subtotal', '53800.00')
             ->assertJsonPath('data.tax_total', '9684.00')
@@ -80,7 +82,7 @@ class InvoiceTest extends TestCase
             ->assertJsonPath('data.taxes.0.name', 'CGST')
             ->assertJsonPath('data.taxes.0.amount', '4842.00');
 
-        $this->postJson('/api/v1/invoices', $this->payload())->assertJsonPath('data.number', 'INV-2026-0002');
+        $this->postJson('/api/v1/invoices', $this->payload())->assertJsonPath('data.number', 'INV/26-27/0002');
         $this->assertDatabaseHas('audit_logs', ['action' => 'invoices.created']);
     }
 
@@ -247,12 +249,12 @@ class InvoiceTest extends TestCase
         $this->post('/admin/invoices', $payload)->assertRedirect()->assertSessionHasNoErrors();
 
         $invoice = Invoice::firstOrFail();
-        $this->assertSame('MT-2026-0001', $invoice->number);
+        $this->assertSame('MT/26-27/0001', $invoice->number);
         $this->assertCount(3, $invoice->items);
         $this->assertSame('63484.00', $invoice->total);
 
         $this->get("/admin/invoices/{$invoice->id}")->assertOk()
-            ->assertSee('MT-2026-0001')->assertSee('Matainja Technologies')
+            ->assertSee('MT/26-27/0001')->assertSee('Matainja Technologies')
             ->assertSee('CGST @ 9%')->assertSee('SGST @ 9%')->assertSee('Mark as sent');
 
         // Unticking every tax in the form removes them.
@@ -263,7 +265,7 @@ class InvoiceTest extends TestCase
         // PDF is generated on the server.
         $response = $this->get("/admin/invoices/{$invoice->id}/pdf")->assertOk()
             ->assertHeader('content-type', 'application/pdf');
-        $this->assertStringContainsString('attachment; filename=MT-2026-0001.pdf', $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('attachment; filename=MT-26-27-0001.pdf', $response->headers->get('content-disposition'));
         $this->assertStringStartsWith('%PDF', $response->getContent());
         $this->assertStringContainsString('inline', $this->get("/admin/invoices/{$invoice->id}/pdf?inline=1")->headers->get('content-disposition'));
 
@@ -272,8 +274,10 @@ class InvoiceTest extends TestCase
         $this->assertStringContainsString('TAX INVOICE', $html);
         $this->assertStringContainsString('19ABCDE1234F1Z5', $html);
         $this->assertStringContainsString('CGST @ 9%', $html);
-        $this->assertStringContainsString('₹4,842.00', $html);
-        $this->assertStringContainsString('₹63,484.00', $html);
+        $this->assertStringContainsString('4,842.00', $html);
+        $this->assertStringContainsString('(INR) 63,484.00', $html);
+        $this->assertStringContainsString('SIXTY THREE THOUSAND FOUR HUNDRED AND EIGHTY FOUR RUPEES ONLY', $html);
+        $this->assertStringContainsString('Stamp &amp; Signature', $html);
         $this->assertStringContainsString('Matainja Technologies', $html);
 
         $this->post("/admin/invoices/{$invoice->id}/status", ['status' => 'sent'])->assertRedirect();
@@ -374,6 +378,123 @@ class InvoiceTest extends TestCase
         $this->get("/admin/invoices/{$invoice->id}")->assertDontSee('data:image/png;base64,', false);
     }
 
+    public function test_pdf_with_long_payment_terms_fits_on_one_page(): void
+    {
+        $this->actingAs($this->userWithRole('Super Admin'));
+        $payload = $this->payload();
+        $payload['terms'] = CompanySettingSeeder::DEFAULT_TERMS;
+        $payload['notes'] = 'Thank you for the project.';
+        $this->post('/admin/invoices', $payload)->assertSessionHasNoErrors();
+
+        $pdf = app(InvoiceService::class)->pdf(Invoice::firstOrFail());
+        $pdf->output();
+
+        $this->assertSame(1, $pdf->getDomPDF()->getCanvas()->get_page_count());
+    }
+
+    public function test_discount_is_taken_off_before_tax_and_payment_mode_is_saved(): void
+    {
+        Sanctum::actingAs($this->userWithRole('HR Admin'));
+        $payload = $this->payload() + ['discount' => 3800, 'payment_mode' => 'NEFT'];
+
+        // 53,800 - 3,800 = 50,000 taxable; CGST + SGST 9% each = 4,500 + 4,500.
+        $id = $this->postJson('/api/v1/invoices', $payload)->assertCreated()
+            ->assertJsonPath('data.subtotal', '53800.00')
+            ->assertJsonPath('data.discount', '3800.00')
+            ->assertJsonPath('data.taxes.0.amount', '4500.00')
+            ->assertJsonPath('data.tax_total', '9000.00')
+            ->assertJsonPath('data.total', '59000.00')
+            ->assertJsonPath('data.payment_mode', 'NEFT')
+            ->json('data.id');
+
+        $html = view('invoices.pdf', ['invoice' => Invoice::findOrFail($id)->load(['client', 'items', 'taxes']), 'company' => app(InvoiceService::class)->company()])->render();
+        $this->assertStringContainsString('Payment Mode: NEFT', $html);
+        $this->assertStringContainsString('- 3,800.00', $html);
+        $this->assertStringContainsString('FIFTY NINE THOUSAND RUPEES ONLY', $html);
+
+        // Removing the discount brings the full subtotal back into tax; the PDF still shows a zero discount line.
+        $this->putJson("/api/v1/invoices/{$id}", ['discount' => 0])->assertOk()->assertJsonPath('data.total', '63484.00');
+        $html = view('invoices.pdf', ['invoice' => Invoice::findOrFail($id)->load(['client', 'items', 'taxes']), 'company' => app(InvoiceService::class)->company()])->render();
+        $this->assertMatchesRegularExpression('/Discount<\/td>\s*<td class="r">0\.00<\/td>/', $html);
+
+        // A discount larger than the subtotal is refused and nothing changes.
+        $this->putJson("/api/v1/invoices/{$id}", ['discount' => 60000])->assertUnprocessable()->assertJsonValidationErrors('discount');
+        $this->assertSame('63484.00', Invoice::findOrFail($id)->total);
+    }
+
+    public function test_commission_fee_is_added_to_the_total_after_tax(): void
+    {
+        Sanctum::actingAs($this->userWithRole('HR Admin'));
+
+        // 53,800 + 9,684 tax (fee is not taxed) + 500 fee = 63,984.
+        $id = $this->postJson('/api/v1/invoices', $this->payload() + ['commission_fee' => 500])->assertCreated()
+            ->assertJsonPath('data.tax_total', '9684.00')
+            ->assertJsonPath('data.commission_fee', '500.00')
+            ->assertJsonPath('data.total', '63984.00')
+            ->json('data.id');
+
+        $html = view('invoices.pdf', ['invoice' => Invoice::findOrFail($id)->load(['client', 'items', 'taxes']), 'company' => app(InvoiceService::class)->company()])->render();
+        $this->assertMatchesRegularExpression('/Commission Fee<\/td>\s*<td class="r">500\.00<\/td>/', $html);
+
+        $this->putJson("/api/v1/invoices/{$id}", ['commission_fee' => 0])->assertOk()->assertJsonPath('data.total', '63484.00');
+    }
+
+    public function test_invoice_numbers_follow_gst_rules_and_restart_each_financial_year(): void
+    {
+        Sanctum::actingAs($this->userWithRole('HR Admin'));
+
+        // March 2027 is still FY 2026-27; April 2027 starts a new series.
+        $this->postJson('/api/v1/invoices', ['issue_date' => '2027-03-31', 'due_date' => null] + $this->payload())->assertJsonPath('data.number', 'INV/26-27/0001');
+        $this->postJson('/api/v1/invoices', $this->payload())->assertJsonPath('data.number', 'INV/26-27/0002');
+        $this->postJson('/api/v1/invoices', ['issue_date' => '2027-04-01', 'due_date' => null] + $this->payload())->assertJsonPath('data.number', 'INV/27-28/0001');
+
+        // Typed numbers: at most 16 characters, only letters, digits, "-" and "/".
+        $this->postJson('/api/v1/invoices', ['number' => 'MT/2026-27/00001'] + $this->payload())->assertCreated();
+        $this->postJson('/api/v1/invoices', ['number' => 'MT/2026-27/000001'] + $this->payload())->assertJsonValidationErrors('number');
+        $this->postJson('/api/v1/invoices', ['number' => 'MT_2026#1'] + $this->payload())->assertJsonValidationErrors('number');
+
+        $this->assertSame('26-27', InvoiceService::financialYear(CarbonImmutable::parse('2026-04-01')));
+        $this->assertSame('25-26', InvoiceService::financialYear(CarbonImmutable::parse('2026-03-31')));
+        $this->assertSame('99-00', InvoiceService::financialYear(CarbonImmutable::parse('2099-12-01')));
+    }
+
+    public function test_invoice_prefix_is_limited_so_numbers_fit_gst_length(): void
+    {
+        $this->actingAs($this->userWithRole('Super Admin'));
+
+        $this->put('/admin/settings', ['invoicing' => ['invoice_prefix' => 'MATAIN']])->assertSessionHasErrors('invoicing.invoice_prefix');
+        $this->put('/admin/settings', ['invoicing' => ['invoice_prefix' => 'MT/X']])->assertSessionHasErrors('invoicing.invoice_prefix');
+        $this->put('/admin/settings', ['invoicing' => ['invoice_prefix' => 'MATIN']])->assertSessionHasNoErrors();
+
+        $number = app(InvoiceService::class)->nextNumber(CarbonImmutable::parse('2026-11-23'));
+        $this->assertSame('MATIN/26-27/0001', $number);
+        $this->assertLessThanOrEqual(16, strlen($number));
+    }
+
+    public function test_admin_form_saves_discount_and_payment_mode(): void
+    {
+        $this->actingAs($this->userWithRole('Super Admin'));
+        $this->get('/admin/invoices/create')->assertOk()->assertSee('id="payment_mode"', false)->assertSee('id="discount"', false);
+
+        $this->post('/admin/invoices', $this->payload() + ['discount' => '3800', 'payment_mode' => 'UPI'])->assertSessionHasNoErrors();
+
+        $invoice = Invoice::firstOrFail();
+        $this->assertSame('UPI', $invoice->payment_mode);
+        $this->assertSame('59000.00', $invoice->total);
+        $this->get("/admin/invoices/{$invoice->id}")->assertSee('Payment mode')->assertSee('UPI')->assertSee('Discount');
+    }
+
+    public function test_amount_in_words_uses_indian_numbering(): void
+    {
+        $service = app(InvoiceService::class);
+
+        $this->assertSame('One Lakh Sixty Thousand Four Hundred and Eighty Rupees Only', $service->amountInWords(160480));
+        $this->assertSame('Two Crore Five Lakh and One Rupees Only', $service->amountInWords(20500001));
+        $this->assertSame('Ninety Nine Rupees and Fifty Paise Only', $service->amountInWords(99.5));
+        $this->assertSame('Zero Rupees Only', $service->amountInWords(0));
+        $this->assertSame('One Thousand USD Only', $service->amountInWords(1000, 'usd'));
+    }
+
     public function test_settings_page_saves_invoicing_details(): void
     {
         $this->actingAs($this->userWithRole('Super Admin'));
@@ -386,6 +507,6 @@ class InvoiceTest extends TestCase
 
         $this->assertSame('Matainja', CompanySetting::where('key', 'company.name')->value('value'));
         $this->assertSame('30', CompanySetting::where('key', 'invoice.due_days')->value('value'));
-        $this->get('/admin/invoices/create')->assertSee('MAT-');
+        $this->get('/admin/invoices/create')->assertSee('MAT/');
     }
 }
