@@ -17,6 +17,7 @@ use App\Models\WfhRequest;
 use App\Services\AttendanceService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class AdminPanelTest extends TestCase
@@ -108,6 +109,21 @@ class AdminPanelTest extends TestCase
         }
         $this->get('/admin/attendance/export')->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $this->get('/admin/organisation/nope')->assertNotFound();
+    }
+
+    public function test_sidebar_links_to_telescope_only_when_it_is_available(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        // Telescope is registered only in the local environment, not in tests.
+        $this->get('/admin')->assertOk()->assertDontSee('>Telescope', false);
+
+        Route::get('/telescope/{view?}', fn () => 'telescope')->name('telescope');
+        Route::getRoutes()->refreshNameLookups();
+
+        $this->get('/admin')->assertOk()
+            ->assertSee('href="'.route('telescope').'" target="_blank"', false)
+            ->assertSee('Telescope');
     }
 
     public function test_add_employee_with_login_role_and_shift(): void
