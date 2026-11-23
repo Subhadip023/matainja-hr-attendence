@@ -152,6 +152,45 @@ class StaffController extends AdminController
         return back()->with('success', "{$staff->full_name} was deactivated and signed out of the app.");
     }
 
+    /**
+     * Permanently delete an employee and their app login. Only allowed when they
+     * have no history (see Staff::deletionBlockers()); otherwise deactivate them.
+     */
+    public function destroy(Staff $staff): RedirectResponse
+    {
+        if ($staff->user_id && $staff->user_id === auth()->id()) {
+            return back()->with('error', 'You cannot delete your own account.');
+        }
+
+        $blockers = $staff->deletionBlockers();
+        if ($blockers !== []) {
+            $list = implode(', ', $blockers);
+
+            return back()->with('error', "Can't delete {$staff->full_name}: they have {$list}. Deleting would erase that history, so deactivate them instead.");
+        }
+
+        $before = $staff->load('user')->toArray();
+        $name = $staff->full_name;
+
+        DB::transaction(function () use ($staff) {
+            // These columns have no foreign key, so clear them by hand.
+            Department::where('head_staff_id', $staff->id)->update(['head_staff_id' => null]);
+            Team::where('manager_id', $staff->id)->update(['manager_id' => null]);
+
+            $user = $staff->user;
+            $staff->delete(); // shift assignments and leave balances go with it; reports lose their manager
+            if ($user) {
+                $user->tokens()->delete(); // signed out of the app
+                $user->roles()->detach();
+                $user->delete();
+            }
+        });
+
+        AuditLog::record('staff.deleted', null, $before);
+
+        return redirect()->route('admin.staff.index')->with('success', "{$name} was deleted".($before['user'] ? ', along with their app login.' : '.'));
+    }
+
     public function reactivate(Staff $staff): RedirectResponse
     {
         $staff->update(['employment_status' => 'active']);

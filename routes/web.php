@@ -29,6 +29,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/employees/{staff}', [Admin\StaffController::class, 'update'])->name('staff.update');
         Route::post('/employees/{staff}/deactivate', [Admin\StaffController::class, 'deactivate'])->name('staff.deactivate');
         Route::post('/employees/{staff}/reactivate', [Admin\StaffController::class, 'reactivate'])->name('staff.reactivate');
+        Route::delete('/employees/{staff}', [Admin\StaffController::class, 'destroy'])->name('staff.destroy');
 
         // Users & roles
         Route::get('/users', [Admin\UserController::class, 'index'])->name('users.index');

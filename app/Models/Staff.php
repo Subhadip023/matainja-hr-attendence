@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Staff extends Model
 {
@@ -108,6 +109,51 @@ class Staff extends Model
     public function getFullNameAttribute(): string
     {
         return trim("{$this->first_name} {$this->last_name}") ?: ($this->name ?? '');
+    }
+
+    /**
+     * Records that would be lost if this employee (and their app login) were
+     * deleted: the database removes them along with the employee or the user.
+     * Empty means the employee can be deleted safely.
+     *
+     * @return list<string> e.g. ["12 attendance days", "1 leave request"]; empty = safe to delete
+     */
+    public function deletionBlockers(): array
+    {
+        // [table, column, singular, plural]
+        $byStaff = [
+            ['attendance', 'staff_id', 'attendance day', 'attendance days'],
+            ['attendance_correction_requests', 'staff_id', 'attendance correction', 'attendance corrections'],
+            ['leave_requests', 'staff_id', 'leave request', 'leave requests'],
+            ['wfh_requests', 'staff_id', 'WFH request', 'WFH requests'],
+            ['expense_claims', 'staff_id', 'expense claim', 'expense claims'],
+            ['meetings', 'organiser_id', 'meeting organised', 'meetings organised'],
+            ['meeting_participants', 'staff_id', 'meeting attended', 'meetings attended'],
+            ['asset_assignments', 'staff_id', 'asset assignment', 'asset assignments'],
+            ['tickets', 'staff_id', 'helpdesk ticket', 'helpdesk tickets'],
+            ['documents', 'owner_staff_id', 'document', 'documents'],
+        ];
+        // Approvals and comments the login made on other people's requests.
+        $byUser = [
+            ['leave_approvals', 'approver_id', 'leave approval given', 'leave approvals given'],
+            ['expense_approvals', 'approver_id', 'expense approval given', 'expense approvals given'],
+            ['ticket_comments', 'user_id', 'ticket comment', 'ticket comments'],
+        ];
+
+        $checks = array_map(fn (array $check) => [...$check, $this->id], $byStaff);
+        if ($this->user_id) {
+            $checks = [...$checks, ...array_map(fn (array $check) => [...$check, $this->user_id], $byUser)];
+        }
+
+        $blockers = [];
+        foreach ($checks as [$table, $column, $singular, $plural, $id]) {
+            $count = DB::table($table)->where($column, $id)->count();
+            if ($count > 0) {
+                $blockers[] = $count.' '.($count === 1 ? $singular : $plural);
+            }
+        }
+
+        return $blockers;
     }
 
     /** Next unused employee code, following the newest code's prefix (EMP-004 -> EMP-005). */

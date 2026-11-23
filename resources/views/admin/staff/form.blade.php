@@ -175,4 +175,26 @@
             </div>
         </div>
     </form>
+
+    @if ($staff->exists && $staff->user_id !== auth()->id())
+        @php $blockers = $staff->deletionBlockers(); @endphp
+        <div class="card" style="margin-top:16px;border-color:#f1c3bd">
+            <div class="card-head"><h2>Delete employee</h2></div>
+            <div class="card-body">
+                @if ($blockers === [])
+                    <p style="margin:0 0 12px">Permanently removes {{ $staff->full_name }}{{ $hasLogin ? ' and their app login' : '' }}. Use this for someone added by mistake. This can't be undone.</p>
+                    <form method="POST" action="{{ route('admin.staff.destroy', $staff) }}" data-confirm="Permanently delete {{ $staff->full_name }}{{ $hasLogin ? ' and their app login' : '' }}? This can't be undone.">
+                        @csrf @method('DELETE')
+                        <button class="btn danger" type="submit">Delete employee</button>
+                    </form>
+                @else
+                    <p class="muted" style="margin:0">
+                        Can't be deleted: {{ $staff->full_name }} has
+                        {{ implode(', ', $blockers) }}.
+                        Deleting would erase that history. Use <strong>Deactivate</strong> on the Employees list instead; it signs them out and keeps their records.
+                    </p>
+                @endif
+            </div>
+        </div>
+    @endif
 @endsection
