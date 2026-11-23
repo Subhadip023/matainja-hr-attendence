@@ -178,7 +178,7 @@
 
     @if ($staff->exists && $staff->user_id !== auth()->id())
         @php $blockers = $staff->deletionBlockers(); @endphp
-        <div class="card" style="margin-top:16px;border-color:#f1c3bd">
+        <div class="card" id="delete" style="margin-top:16px;border-color:#f1c3bd">
             <div class="card-head"><h2>Delete employee</h2></div>
             <div class="card-body">
                 @if ($blockers === [])

@@ -168,7 +168,8 @@ class StaffController extends AdminController
             $list = implode(', ', $blockers);
 
             if (! $request->boolean('force')) {
-                return back()->with('error', "Can't delete {$staff->full_name}: they have {$list}. Deactivate them instead, or open their profile to permanently delete them along with that history.");
+                return redirect()->to(route('admin.staff.edit', $staff).'#delete')
+                    ->with('error', "{$staff->full_name} has {$list}. To delete them anyway, type their employee code below and force delete, or deactivate them instead to keep the history.");
             }
 
             if (trim((string) $request->input('confirm_code')) !== (string) $staff->employee_code) {

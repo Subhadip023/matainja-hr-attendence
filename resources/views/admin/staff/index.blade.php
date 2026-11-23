@@ -76,7 +76,7 @@
                             @endif
                             @if ($s->user_id !== auth()->id())
                                 <form class="inline" method="POST" action="{{ route('admin.staff.destroy', $s) }}"
-                                      data-confirm="Permanently delete {{ $name }}{{ $s->user ? ' and their app login' : '' }}? This can't be undone. Employees with attendance or other history must be force deleted from their profile.">
+                                      data-confirm="Permanently delete {{ $name }}{{ $s->user ? ' and their app login' : '' }}? This can't be undone. If they have attendance or other history, you'll be taken to their profile to confirm a force delete.">
                                     @csrf @method('DELETE')
                                     <button class="btn sm ghost" title="Delete employee" aria-label="Delete {{ $name }}">Delete</button>
                                 </form>

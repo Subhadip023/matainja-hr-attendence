@@ -82,8 +82,8 @@ class StaffDeleteTest extends TestCase
         LeaveRequest::create(['staff_id' => $staff->id, 'leave_type_id' => $leaveType->id, 'from_date' => '2026-11-24', 'to_date' => '2026-11-24', 'total_days' => 1]);
 
         $this->from(route('admin.staff.index'))->delete(route('admin.staff.destroy', $staff))
-            ->assertRedirect(route('admin.staff.index'))
-            ->assertSessionHas('error', "Can't delete Asha Roy: they have 1 attendance day, 1 leave request. Deactivate them instead, or open their profile to permanently delete them along with that history.");
+            ->assertRedirect(route('admin.staff.edit', $staff).'#delete')
+            ->assertSessionHas('error', 'Asha Roy has 1 attendance day, 1 leave request. To delete them anyway, type their employee code below and force delete, or deactivate them instead to keep the history.');
 
         $this->assertModelExists($staff);
         $this->assertModelExists($staff->user);
