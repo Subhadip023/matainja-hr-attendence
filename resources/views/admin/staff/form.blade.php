@@ -16,6 +16,7 @@
         </div>
         @if ($staff->exists)
             <div class="actions">
+                <a class="btn" href="{{ route('admin.staff.salary', $staff) }}">Salary</a>
                 <a class="btn" href="{{ route('admin.attendance.index', ['q' => $staff->employee_code ?: $staff->full_name]) }}">Attendance</a>
             </div>
         @endif

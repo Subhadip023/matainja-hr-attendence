@@ -5,15 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
     <title>Sign in · HRM Matainja Admin</title>
-    <link rel="stylesheet" href="{{ asset('admin-assets/admin.css') }}?v=2">
+    <link rel="stylesheet" href="{{ asset('admin-assets/admin.css') }}?v=6">
 </head>
 <body>
 <div class="login-wrap">
     <div class="card login-card">
         <div class="brand">
-            <span class="brand-mark">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M17 11V3H7v4H3v14h8v-4h2v4h8V11h-4z"/></svg>
-            </span>
+            @include('admin.partials.brand-mark')
             <span>HRM Matainja<small>Super Admin console</small></span>
         </div>
         <h1 style="margin-bottom:4px">Sign in</h1>

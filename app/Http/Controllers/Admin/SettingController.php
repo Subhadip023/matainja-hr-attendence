@@ -7,13 +7,18 @@ use App\Models\CompanySetting;
 use App\Services\AttendanceService;
 use App\Services\GeofenceService;
 use App\Services\InvoiceService;
+use App\Services\PayrollService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class SettingController extends AdminController
 {
+    public function __construct(private PayrollService $payroll) {}
+
     public function index(): View
     {
         $stored = CompanySetting::orderBy('key')->get()->keyBy('key');
@@ -24,6 +29,12 @@ class SettingController extends AdminController
             'stored' => $stored,
             'wfhDays' => array_map('intval', array_filter(explode(',', (string) ($stored[AttendanceService::SETTING_WFH_WEEKDAYS]->value ?? AttendanceService::DEFAULT_WFH_WEEKDAYS)), 'strlen')),
             'others' => $stored->except($known),
+            'payroll' => [
+                'weekly_off_days' => $this->payroll->weeklyOffDays(),
+                'lop_basis' => $this->payroll->lopBasis(),
+                'pt_state' => $this->payroll->ptState(),
+                'overtime_multiplier' => $this->payroll->overtimeMultiplier(),
+            ],
         ]);
     }
 
@@ -43,6 +54,11 @@ class SettingController extends AdminController
             // PNG/JPG only: the PDF engine can't draw WebP or SVG reliably.
             'company_logo' => ['nullable', 'file', 'image', 'mimes:png,jpg,jpeg', 'max:1024', 'dimensions:max_width=3000,max_height=3000'],
             'remove_logo' => ['nullable', 'boolean'],
+            'weekly_off_days' => ['nullable', 'array'],
+            'weekly_off_days.*' => ['integer', 'between:1,7'],
+            'lop_basis' => ['nullable', Rule::in(array_keys(PayrollService::LOP_BASES))],
+            'pt_state' => ['nullable', Rule::in([...array_keys(config('payroll.professional_tax.states')), 'none'])],
+            'overtime_multiplier' => ['nullable', 'numeric', 'min:0', 'max:5'],
             'custom' => ['nullable', 'array'],
             'custom.*' => ['nullable', 'string', 'max:2000'],
             'new_key' => ['nullable', 'string', 'max:100', 'regex:/^[a-z0-9_.]+$/'],
@@ -70,6 +86,15 @@ class SettingController extends AdminController
             }
         }
 
+        // Payroll (only when the form sent its fields, so other callers don't reset them).
+        if ($request->has('lop_basis')) {
+            $offDays = collect($data['weekly_off_days'] ?? [])->map(fn ($d) => (int) $d)->unique()->sort()->implode(',');
+            $this->put(PayrollService::SETTING_WEEKLY_OFF_DAYS, $offDays, 'string');
+            $this->put(PayrollService::SETTING_LOP_BASIS, $data['lop_basis'], 'string');
+            $this->put(PayrollService::SETTING_PT_STATE, $data['pt_state'] ?? 'none', 'string');
+            $this->put(PayrollService::SETTING_OVERTIME_MULTIPLIER, (string) (float) ($data['overtime_multiplier'] ?? 0), 'string');
+        }
+
         $this->saveLogo($request);
 
         foreach ($data['custom'] ?? [] as $key => $value) {
@@ -84,6 +109,19 @@ class SettingController extends AdminController
         AuditLog::record('settings.updated', null, $before, CompanySetting::pluck('value', 'key')->all());
 
         return back()->with('success', 'Settings saved. The mobile app uses them from the next check-in.');
+    }
+
+    /**
+     * The organisation logo as an image, for the sidebar and sign-in page.
+     * Public (it's printed on invoices anyway) and cached by the browser;
+     * the URL changes with every new upload.
+     */
+    public function logo(InvoiceService $invoices): BinaryFileResponse
+    {
+        $path = $invoices->setting(InvoiceService::SETTING_LOGO);
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), ['Cache-Control' => 'public, max-age=604800']);
     }
 
     /** Upload a new logo (replacing the old file) or remove it. */
@@ -118,6 +156,10 @@ class SettingController extends AdminController
             GeofenceService::SETTING_ENFORCED => 'Enforce office geofence',
             GeofenceService::SETTING_DEFAULT_RADIUS => 'Default geofence radius',
             InvoiceService::SETTING_LOGO => 'Organisation logo',
+            PayrollService::SETTING_WEEKLY_OFF_DAYS => 'Weekly off days',
+            PayrollService::SETTING_LOP_BASIS => 'Loss-of-pay daily rate',
+            PayrollService::SETTING_PT_STATE => 'Professional Tax state',
+            PayrollService::SETTING_OVERTIME_MULTIPLIER => 'Overtime pay rate',
         ] + self::invoicingKeys();
     }
 

@@ -17,7 +17,9 @@ use App\Models\WfhRequest;
 use App\Services\AttendanceService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AdminPanelTest extends TestCase
@@ -28,6 +30,25 @@ class AdminPanelTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+    }
+
+    public function test_sidebar_and_sign_in_show_the_organisation_logo_once_uploaded(): void
+    {
+        Storage::fake('local');
+        $this->get(route('admin.login'))->assertSee('M17 11V3H7v4H3v14h8v-4h2v4h8V11h-4z', false)->assertDontSee('has-logo');
+        $this->get(route('admin.logo'))->assertNotFound();
+
+        $this->actingAs($this->superAdmin());
+        $this->put(route('admin.settings.update'), ['company_logo' => UploadedFile::fake()->image('logo.png', 200, 200)])->assertSessionHasNoErrors();
+        $path = CompanySetting::where('key', 'company.logo')->value('value');
+        $logoUrl = route('admin.logo', ['v' => substr(md5($path), 0, 8)]);
+
+        $this->get(route('admin.dashboard'))->assertSee('brand-mark has-logo', false)->assertSee($logoUrl, false);
+        $this->get(route('admin.logo'))->assertOk()->assertHeader('content-type', 'image/png');
+
+        auth()->logout();
+        $this->get(route('admin.login'))->assertSee($logoUrl, false);
+        $this->get(route('admin.logo'))->assertOk(); // public, like the invoices it's printed on
     }
 
     private function superAdmin(): User

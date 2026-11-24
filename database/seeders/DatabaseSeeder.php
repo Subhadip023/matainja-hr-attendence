@@ -67,10 +67,12 @@ class DatabaseSeeder extends Seeder
         // Company details for invoices (only empty values are filled) and GST rates.
         $this->call(CompanySettingSeeder::class);
         $this->call(TaxSeeder::class);
+        $this->call(SalaryComponentSeeder::class);
 
         // Demo logins (password: password) and demo clients/invoices.
         // Both skip themselves on live servers — see DemoData.
         $this->call(DemoUserSeeder::class);
         $this->call(InvoiceSeeder::class);
+        $this->call(PayrollDemoSeeder::class);
     }
 }

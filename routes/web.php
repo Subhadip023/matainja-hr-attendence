@@ -11,6 +11,9 @@ Route::get('/', fn () => redirect()->route('admin.dashboard'));
 | mobile app keeps using the Sanctum token API under /api/v1.
 */
 Route::prefix('admin')->name('admin.')->group(function () {
+    // Organisation logo for the sidebar and the sign-in page (public: it's on every invoice).
+    Route::get('/logo', [Admin\SettingController::class, 'logo'])->name('logo');
+
     Route::middleware('guest')->group(function () {
         Route::get('/login', [Admin\AuthController::class, 'showLogin'])->name('login');
         Route::post('/login', [Admin\AuthController::class, 'login'])->middleware('throttle:6,1')->name('login.attempt');
@@ -37,6 +40,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/employees/{staff}/deactivate', [Admin\StaffController::class, 'deactivate'])->name('staff.deactivate');
         Route::post('/employees/{staff}/reactivate', [Admin\StaffController::class, 'reactivate'])->name('staff.reactivate');
         Route::delete('/employees/{staff}', [Admin\StaffController::class, 'destroy'])->name('staff.destroy');
+
+        // Employee salary (payroll setup)
+        Route::get('/employees/{staff}/salary', [Admin\StaffSalaryController::class, 'show'])->name('staff.salary');
+        Route::put('/employees/{staff}/salary/profile', [Admin\StaffSalaryController::class, 'updateProfile'])->name('staff.salary.profile');
+        Route::post('/employees/{staff}/salary/revisions', [Admin\StaffSalaryController::class, 'storeStructure'])->name('staff.salary.store');
+        Route::delete('/employees/{staff}/salary/revisions/{salaryStructure}', [Admin\StaffSalaryController::class, 'destroyStructure'])
+            ->scopeBindings()->name('staff.salary.destroy');
 
         // Users & roles
         Route::get('/users', [Admin\UserController::class, 'index'])->name('users.index');
@@ -66,6 +76,27 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/invoices/{invoice}', [Admin\InvoiceController::class, 'update'])->name('invoices.update');
         Route::post('/invoices/{invoice}/status', [Admin\InvoiceController::class, 'status'])->name('invoices.status');
         Route::delete('/invoices/{invoice}', [Admin\InvoiceController::class, 'destroy'])->name('invoices.destroy');
+
+        // Payroll
+        Route::get('/payroll', [Admin\PayrollController::class, 'index'])->name('payroll.index');
+        Route::post('/payroll', [Admin\PayrollController::class, 'store'])->name('payroll.store');
+        Route::get('/payroll/{payrollRun}', [Admin\PayrollController::class, 'show'])->name('payroll.show');
+        Route::post('/payroll/{payrollRun}/recalculate', [Admin\PayrollController::class, 'recalculate'])->name('payroll.recalculate');
+        Route::post('/payroll/{payrollRun}/lock', [Admin\PayrollController::class, 'lock'])->name('payroll.lock');
+        Route::post('/payroll/{payrollRun}/reopen', [Admin\PayrollController::class, 'reopen'])->name('payroll.reopen');
+        Route::post('/payroll/{payrollRun}/paid', [Admin\PayrollController::class, 'markPaid'])->name('payroll.paid');
+        Route::delete('/payroll/{payrollRun}', [Admin\PayrollController::class, 'destroy'])->name('payroll.destroy');
+        Route::get('/payroll/{payrollRun}/payslips.pdf', [Admin\PayrollController::class, 'pdf'])->name('payroll.pdf');
+        Route::get('/payroll/{payrollRun}/bank-transfer.csv', [Admin\PayrollController::class, 'bankTransfer'])->name('payroll.bank');
+        Route::get('/payroll/{payrollRun}/register.csv', [Admin\PayrollController::class, 'register'])->name('payroll.register');
+        Route::get('/payroll/{payrollRun}/ecr.txt', [Admin\PayrollController::class, 'ecr'])->name('payroll.ecr');
+        Route::scopeBindings()->group(function () {
+            Route::get('/payroll/{payrollRun}/payslips/{payslip}', [Admin\PayslipController::class, 'show'])->name('payroll.payslips.show');
+            Route::get('/payroll/{payrollRun}/payslips/{payslip}/pdf', [Admin\PayslipController::class, 'pdf'])->name('payroll.payslips.pdf');
+            Route::put('/payroll/{payrollRun}/payslips/{payslip}/lop', [Admin\PayslipController::class, 'updateLop'])->name('payroll.payslips.lop');
+            Route::post('/payroll/{payrollRun}/payslips/{payslip}/adjustments', [Admin\PayslipController::class, 'storeAdjustment'])->name('payroll.adjustments.store');
+            Route::delete('/payroll/{payrollRun}/adjustments/{adjustment}', [Admin\PayslipController::class, 'destroyAdjustment'])->name('payroll.adjustments.destroy');
+        });
 
         // Attendance & approvals
         Route::get('/attendance', [Admin\AttendanceController::class, 'index'])->name('attendance.index');

@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow">
     <title>@yield('title', 'Dashboard') · HRM Matainja Admin</title>
-    <link rel="stylesheet" href="{{ asset('admin-assets/admin.css') }}?v=4">
+    <link rel="stylesheet" href="{{ asset('admin-assets/admin.css') }}?v=6">
     @stack('styles')
 </head>
 <body>
@@ -23,7 +23,8 @@
         'audit' => 'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z',
         'clients' => 'M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z',
         'invoices' => 'M19.5 3.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5zM19 19.09H5V4.91h14v14.18zM6 15h12v2H6zm0-4h12v2H6zm0-4h12v2H6z',
-        'telescope' => 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
+        'payroll' => 'M19 14V6c0-1.1-.9-2-2-2H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zm-9-1c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm13-6v11c0 1.1-.9 2-2 2H4v-2h17V7h2z',
+        'telescope' =>'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
     ];
     // Clients share the organisation screens, so tell the two sidebar links apart by {type}.
     $onClients = request()->routeIs('admin.org.*') && request()->route('type') === 'clients';
@@ -44,6 +45,7 @@
         'Operations' => [
             ['admin.attendance.index', 'Attendance', 'attendance', 'admin.attendance.*'],
             ['admin.approvals.index', 'Approvals', 'approvals', 'admin.approvals.*'],
+            ['admin.payroll.index', 'Payroll', 'payroll', 'admin.payroll.*'],
             ['admin.org.index', 'Clients', 'clients', 'admin.org.*', ['type' => 'clients']],
             ['admin.invoices.index', 'Invoices', 'invoices', 'admin.invoices.*'],
         ],
@@ -57,9 +59,7 @@
 <div class="shell">
     <aside class="sidebar" id="sidebar">
         <div class="brand">
-            <span class="brand-mark">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M17 11V3H7v4H3v14h8v-4h2v4h8V11h-4z"/></svg>
-            </span>
+            @include('admin.partials.brand-mark')
             <span>HRM Matainja<small>Super Admin console</small></span>
         </div>
         <nav class="nav">
@@ -79,7 +79,7 @@
             @if (Route::has('telescope'))
                 <a href="{{ route('telescope') }}" target="_blank" rel="noopener">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="{{ $icons['telescope'] }}"/></svg>
-                    Telescope
+                    Site Health
                 </a>
             @endif
         </nav>

@@ -3,8 +3,11 @@
 namespace App\Providers;
 
 use App\Models\AttendanceCorrectionRequest;
+use App\Models\CompanySetting;
 use App\Models\LeaveRequest;
 use App\Models\WfhRequest;
+use App\Services\InvoiceService;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -34,6 +37,15 @@ class AppServiceProvider extends ServiceProvider
                 LeaveRequest::where('status', 'pending')->count()
                 + WfhRequest::where('status', 'pending')->count()
                 + AttendanceCorrectionRequest::where('status', 'pending')->count());
+        });
+
+        // Organisation logo from Settings for the admin sidebar and sign-in page.
+        View::composer(['admin.layout', 'admin.login'], function ($view) {
+            $logoPath = CompanySetting::where('key', InvoiceService::SETTING_LOGO)->value('value');
+
+            $view->with('brandLogoUrl', $logoPath && Storage::disk('local')->exists($logoPath)
+                ? route('admin.logo', ['v' => substr(md5($logoPath), 0, 8)])
+                : null);
         });
     }
 }

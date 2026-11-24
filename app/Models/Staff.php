@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 class Staff extends Model
@@ -106,6 +108,30 @@ class Staff extends Model
         return $this->hasMany(AssetAssignment::class);
     }
 
+    public function payrollProfile(): HasOne
+    {
+        return $this->hasOne(StaffPayrollProfile::class);
+    }
+
+    public function salaryStructures(): HasMany
+    {
+        return $this->hasMany(StaffSalaryStructure::class)->orderByDesc('effective_from');
+    }
+
+    public function payslips(): HasMany
+    {
+        return $this->hasMany(Payslip::class);
+    }
+
+    /** The salary revision in force on the given date (today by default). */
+    public function salaryStructureOn(?CarbonInterface $date = null): ?StaffSalaryStructure
+    {
+        return $this->salaryStructures()
+            ->whereDate('effective_from', '<=', ($date ?? now())->toDateString())
+            ->with('items')
+            ->first();
+    }
+
     public function getFullNameAttribute(): string
     {
         return trim("{$this->first_name} {$this->last_name}") ?: ($this->name ?? '');
@@ -144,6 +170,8 @@ class Staff extends Model
             ['asset_assignments', 'staff_id', 'asset assignment', 'asset assignments'],
             ['tickets', 'staff_id', 'helpdesk ticket', 'helpdesk tickets'],
             ['documents', 'owner_staff_id', 'document', 'documents'],
+            ['staff_salary_structures', 'staff_id', 'salary revision', 'salary revisions'],
+            ['payslips', 'staff_id', 'payslip', 'payslips'],
         ];
         // Approvals and comments the login made on other people's requests.
         $byUser = [

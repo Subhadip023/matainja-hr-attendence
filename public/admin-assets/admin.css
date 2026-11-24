@@ -48,6 +48,8 @@ h3 { font-size: 14px; font-weight: 600; }
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; color: #fff; font-weight: 700; font-size: 15px; }
 .brand-mark { width: 34px; height: 34px; border-radius: 9px; background: var(--brand); display: grid; place-items: center; flex: none; }
+.brand-mark.has-logo { width: 40px; height: 40px; background: #fff; padding: 3px; }
+.brand-mark.has-logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
 .brand small { display: block; font-weight: 500; font-size: 11px; color: #8fb8b1; letter-spacing: .02em; }
 .nav { padding: 6px 10px 16px; flex: 1; }
 .nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #7fa59f; padding: 14px 10px 6px; }

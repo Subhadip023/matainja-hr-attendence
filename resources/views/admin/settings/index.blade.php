@@ -18,28 +18,64 @@
     <form method="POST" action="{{ route('admin.settings.update') }}" enctype="multipart/form-data">
         @csrf @method('PUT')
         <div class="grid grid-2" style="align-items:start">
-            <div class="card">
-                <div class="card-head"><h2>Attendance & WFH</h2></div>
-                <div class="card-body">
-                    <div class="field">
-                        <label>Work-from-home weekdays</label>
-                        <div class="toolbar" style="gap:14px">
-                            @foreach ($days as $n => $day)
-                                <label class="check" style="font-weight:400"><input type="checkbox" name="wfh_weekdays[]" value="{{ $n }}" @checked(in_array($n, $wfhDays, true))> {{ $day }}</label>
-                            @endforeach
+            <div class="stack">
+                <div class="card">
+                    <div class="card-head"><h2>Attendance & WFH</h2></div>
+                    <div class="card-body">
+                        <div class="field">
+                            <label>Work-from-home weekdays</label>
+                            <div class="toolbar" style="gap:14px">
+                                @foreach ($days as $n => $day)
+                                    <label class="check" style="font-weight:400"><input type="checkbox" name="wfh_weekdays[]" value="{{ $n }}" @checked(in_array($n, $wfhDays, true))> {{ $day }}</label>
+                                @endforeach
+                            </div>
+                            <div class="hint">On these days everyone may check in from anywhere (no geofence) and the day is stored as WFH. Approved WFH requests work the same on any day.
+                                The app's on-screen "WFH day" notice is built for Wednesday, so if you change this, update the app too.</div>
                         </div>
-                        <div class="hint">On these days everyone may check in from anywhere (no geofence) and the day is stored as WFH. Approved WFH requests work the same on any day.
-                            The app's on-screen "WFH day" notice is built for Wednesday, so if you change this, update the app too.</div>
+                        <div class="field">
+                            <input type="hidden" name="geofence_enforced" value="0">
+                            <label class="check"><input type="checkbox" name="geofence_enforced" value="1" @checked($enforced)> Enforce the office geofence on office days</label>
+                            <div class="hint">When on, staff must be inside their branch radius to check in or out. Branches without coordinates are never enforced.</div>
+                        </div>
+                        <div class="field" style="max-width:260px">
+                            <label for="radius">Default geofence radius (metres)</label>
+                            <input id="radius" type="number" name="geofence_radius_meters" min="10" max="100000" value="{{ old('geofence_radius_meters', $radius) }}" placeholder="100">
+                            <div class="hint">Used when a branch has no radius of its own. Default 100 m.</div>
+                        </div>
                     </div>
-                    <div class="field">
-                        <input type="hidden" name="geofence_enforced" value="0">
-                        <label class="check"><input type="checkbox" name="geofence_enforced" value="1" @checked($enforced)> Enforce the office geofence on office days</label>
-                        <div class="hint">When on, staff must be inside their branch radius to check in or out. Branches without coordinates are never enforced.</div>
-                    </div>
-                    <div class="field" style="max-width:260px">
-                        <label for="radius">Default geofence radius (metres)</label>
-                        <input id="radius" type="number" name="geofence_radius_meters" min="10" max="100000" value="{{ old('geofence_radius_meters', $radius) }}" placeholder="100">
-                        <div class="hint">Used when a branch has no radius of its own. Default 100 m.</div>
+                </div>
+
+                <div class="card" id="payroll">
+                    <div class="card-head"><h2>Payroll</h2></div>
+                    <div class="card-body form-grid">
+                        <div class="field wide">
+                            <label>Weekly off days</label>
+                            <div class="toolbar" style="gap:14px">
+                                @foreach ($days as $n => $day)
+                                    <label class="check" style="font-weight:400"><input type="checkbox" name="weekly_off_days[]" value="{{ $n }}" @checked(in_array($n, $payroll['weekly_off_days'], true))> {{ $day }}</label>
+                                @endforeach
+                            </div>
+                            <div class="hint">Paid days off. Any other day without attendance or approved leave counts as loss of pay.</div>
+                        </div>
+                        <div class="field">
+                            <label for="lop_basis">Daily rate for loss of pay</label>
+                            <select id="lop_basis" name="lop_basis">
+                                @foreach (\App\Services\PayrollService::LOP_BASES as $value => $label)<option value="{{ $value }}" @selected($payroll['lop_basis'] === $value)>Monthly salary ÷ {{ strtolower($label) }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="pt_state">Professional Tax state</label>
+                            <select id="pt_state" name="pt_state">
+                                @foreach (config('payroll.professional_tax.states') as $code => $state)<option value="{{ $code }}" @selected($payroll['pt_state'] === $code)>{{ $state['name'] }}</option>@endforeach
+                                <option value="none" @selected($payroll['pt_state'] === null)>No Professional Tax</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="overtime_multiplier">Overtime pay rate</label>
+                            <input id="overtime_multiplier" type="number" name="overtime_multiplier" min="0" max="5" step="0.25" value="{{ old('overtime_multiplier', $payroll['overtime_multiplier']) }}">
+                            <div class="hint">× the hourly rate (gross ÷ days ÷ {{ config('payroll.overtime_hours_per_day') }} h). 0 = overtime is not paid; 2 = double rate.</div>
+                        </div>
+                        <div class="hint wide">PF, ESI, PT and income-tax rates are kept in config/payroll.php; update them when the rules change.</div>
                     </div>
                 </div>
             </div>

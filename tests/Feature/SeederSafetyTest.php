@@ -4,14 +4,18 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Models\PayrollAdjustment;
+use App\Models\PayrollRun;
 use App\Models\Role;
 use App\Models\Staff;
+use App\Models\StaffSalaryStructure;
 use App\Models\Tax;
 use App\Models\User;
 use Database\Seeders\AdminUserSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoUserSeeder;
 use Database\Seeders\InvoiceSeeder;
+use Database\Seeders\PayrollDemoSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -78,6 +82,8 @@ class SeederSafetyTest extends TestCase
         $this->assertSame(0, User::where('email', 'like', '%@example.com')->count());
         $this->assertSame(0, Client::count());
         $this->assertSame(0, Invoice::count());
+        $this->assertSame(0, PayrollRun::count());
+        $this->assertSame(0, StaffSalaryStructure::count());
 
         // Reference data is there.
         $this->assertSame(4, Role::count());
@@ -98,6 +104,26 @@ class SeederSafetyTest extends TestCase
 
         $this->assertSame(4, User::where('email', 'like', '%@example.com')->count());
         $this->assertSame(6, Invoice::count());
+    }
+
+    public function test_demo_payroll_has_a_paid_month_and_a_draft_and_is_safe_to_run_again(): void
+    {
+        $this->seedForced(DatabaseSeeder::class);
+
+        $runs = PayrollRun::orderBy('year')->orderBy('month')->get();
+        $this->assertSame(['paid', 'draft'], $runs->pluck('status')->all());
+        $this->assertSame([4, 4], $runs->pluck('employee_count')->all());
+        $this->assertSame(2, PayrollAdjustment::count());
+
+        // The demo employee: one absent day in both months, plus one unpaid leave day in the latest.
+        $employee = Staff::where('email', 'employee@example.com')->sole();
+        $this->assertSame(['1.0', '2.0'], $runs->map(fn ($r) => $r->payslips()->where('staff_id', $employee->id)->value('lop_days'))->all());
+        $this->assertGreaterThan(0, (float) $runs[1]->payslips()->where('staff_id', $employee->id)->value('employee_esi'));
+
+        $this->seedForced(PayrollDemoSeeder::class);
+        $this->assertSame(2, PayrollRun::count());
+        $this->assertSame(4, StaffSalaryStructure::count());
+        $this->assertSame(2, PayrollAdjustment::count());
     }
 
     public function test_invoice_seeder_run_alone_on_live_adds_no_demo_clients(): void

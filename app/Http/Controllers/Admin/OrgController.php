@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Holiday;
 use App\Models\LeaveType;
+use App\Models\SalaryComponent;
 use App\Models\Shift;
 use App\Models\Staff;
 use App\Models\Tax;
@@ -297,6 +298,44 @@ class OrgController extends AdminController
                     'is_active' => ['label' => 'Active', 'type' => 'checkbox', 'rules' => ['nullable']],
                 ],
                 'defaults' => ['is_active' => true],
+            ],
+            'salary-components' => [
+                'model' => SalaryComponent::class, 'title' => 'Salary components', 'singular' => 'Salary component',
+                'intro' => 'The earnings (and fixed deductions) an employee\'s salary is split into. "Balance of gross" takes whatever is left, so the parts always add up. PF, ESI, Professional Tax and TDS are worked out by payroll; don\'t add them here. Changes only affect salary revisions saved afterwards.',
+                'search' => 'name', 'order' => ['is_active' => 'desc', 'type' => 'desc', 'sort_order' => 'asc', 'name' => 'asc'],
+                'guard' => ['structureItems' => 'salary revisions using it (turn it off instead)'],
+                'columns' => [
+                    'name' => 'Name', 'code' => 'Code',
+                    'type' => ['Type', fn ($r) => SalaryComponent::TYPES[$r->type] ?? $r->type],
+                    'calculation' => ['Rule', fn ($r) => $r->rule_label],
+                    'is_taxable' => ['Taxable', fn ($r) => $r->is_taxable ? 'Yes' : 'No'],
+                    'is_prorated' => ['Cut for LOP', fn ($r) => $r->is_prorated ? 'Yes' : 'No'],
+                    'sort_order' => 'Order',
+                    'is_active' => ['Status', fn ($r) => $r->is_active ? 'Active' : 'Turned off'],
+                ],
+                'fields' => [
+                    'name' => ['label' => 'Name', 'rules' => ['required', 'string', 'max:100'], 'hint' => 'e.g. Basic, HRA, Special Allowance'],
+                    'code' => ['label' => 'Code', 'rules' => fn ($r) => ['required', 'alpha_dash', 'max:30', Rule::unique('salary_components', 'code')->ignore($r)],
+                        'hint' => 'Use BASIC for Basic pay: "% of Basic" and PF use it'],
+                    'type' => ['label' => 'Type', 'type' => 'select', 'options' => fn () => SalaryComponent::TYPES, 'rules' => ['required', Rule::in(array_keys(SalaryComponent::TYPES))]],
+                    'calculation' => ['label' => 'Calculation', 'type' => 'select', 'options' => fn () => SalaryComponent::CALCULATIONS, 'rules' => ['required', Rule::in(array_keys(SalaryComponent::CALCULATIONS)),
+                        function (string $attribute, mixed $value, \Closure $fail) {
+                            if ($value === 'balance' && request('type') !== 'earning') {
+                                $fail('Only an earning can take the balance of gross.');
+                            }
+                        }]],
+                    'value' => ['label' => 'Amount (₹) or percent', 'type' => 'number', 'step' => '0.01', 'rules' => ['required', 'numeric', 'min:0', 'max:99999999',
+                        function (string $attribute, mixed $value, \Closure $fail) {
+                            if (str_starts_with((string) request('calculation'), 'percent_') && $value > 100) {
+                                $fail('A percentage can\'t be more than 100.');
+                            }
+                        }], 'hint' => 'Ignored for "Balance of gross"'],
+                    'sort_order' => ['label' => 'Order on payslip', 'type' => 'number', 'rules' => ['required', 'integer', 'min:0', 'max:1000']],
+                    'is_taxable' => ['label' => 'Taxable (counts for TDS)', 'type' => 'checkbox', 'rules' => ['nullable']],
+                    'is_prorated' => ['label' => 'Cut for loss-of-pay days', 'type' => 'checkbox', 'rules' => ['nullable']],
+                    'is_active' => ['label' => 'Active', 'type' => 'checkbox', 'rules' => ['nullable']],
+                ],
+                'defaults' => ['type' => 'earning', 'calculation' => 'fixed', 'value' => 0, 'sort_order' => 10, 'is_taxable' => true, 'is_prorated' => true, 'is_active' => true],
             ],
             'clients' => [
                 'model' => Client::class, 'title' => 'Clients', 'singular' => 'Client', 'modal' => true,
