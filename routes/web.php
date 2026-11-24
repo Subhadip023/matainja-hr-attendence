@@ -41,6 +41,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/employees/{staff}/reactivate', [Admin\StaffController::class, 'reactivate'])->name('staff.reactivate');
         Route::delete('/employees/{staff}', [Admin\StaffController::class, 'destroy'])->name('staff.destroy');
 
+        // Work from home added by an admin
+        Route::post('/employees/{staff}/wfh', [Admin\StaffWfhController::class, 'store'])->name('staff.wfh.store');
+        Route::post('/employees/{staff}/wfh/{wfhRequest}/cancel', [Admin\StaffWfhController::class, 'cancel'])
+            ->scopeBindings()->name('staff.wfh.cancel');
+
         // Employee salary (payroll setup)
         Route::get('/employees/{staff}/salary', [Admin\StaffSalaryController::class, 'show'])->name('staff.salary');
         Route::put('/employees/{staff}/salary/profile', [Admin\StaffSalaryController::class, 'updateProfile'])->name('staff.salary.profile');

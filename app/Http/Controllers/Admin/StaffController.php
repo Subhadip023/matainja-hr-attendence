@@ -94,7 +94,14 @@ class StaffController extends AdminController
     {
         $staff->load(['user.roles', 'shiftAssignments.shift']);
 
-        return view('admin.staff.form', $this->formData($staff));
+        return view('admin.staff.form', [
+            ...$this->formData($staff),
+            // Current and upcoming first, then the most recent past ones.
+            'wfhRequests' => $staff->wfhRequests()->with('approver:id,name')
+                ->orderByRaw('CASE WHEN to_date >= ? THEN 0 ELSE 1 END', [$this->today()->toDateString()])
+                ->orderByDesc('from_date')->limit(10)->get(),
+            'today' => $this->today(),
+        ]);
     }
 
     public function update(Request $request, Staff $staff): RedirectResponse

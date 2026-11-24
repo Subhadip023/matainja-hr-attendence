@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Models\Staff;
+use App\Models\WfhRequest;
 use App\Services\AttendanceService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -114,9 +115,14 @@ class AttendanceController extends AdminController
             ->whereIn('staff_id', $staff->pluck('id'))
             ->get()->keyBy('staff_id');
 
+        $wfhApproved = WfhRequest::where('status', 'approved')
+            ->whereDate('from_date', '<=', $day)->whereDate('to_date', '>=', $day)
+            ->whereIn('staff_id', $staff->pluck('id'))
+            ->pluck('staff_id')->flip();
+
         $isPast = $date->lt($this->today());
 
-        $rows = $staff->map(function (Staff $s) use ($attendance, $onLeave, $isPast) {
+        $rows = $staff->map(function (Staff $s) use ($attendance, $onLeave, $wfhApproved, $isPast) {
             $a = $attendance->get($s->id);
             $resource = [];
             if ($a) {
@@ -138,6 +144,8 @@ class AttendanceController extends AdminController
                 'attendance' => $a,
                 'bucket' => $bucket,
                 'label' => $label,
+                'wfh_approved' => $wfhApproved->has($s->id),
+                'on_leave' => $leave !== null,
                 'in_location' => $resource['check_in_location'] ?? null,
                 'out_location' => $resource['check_out_location'] ?? null,
             ];

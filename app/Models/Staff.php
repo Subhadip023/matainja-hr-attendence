@@ -118,6 +118,11 @@ class Staff extends Model
         return $this->hasMany(StaffSalaryStructure::class)->orderByDesc('effective_from');
     }
 
+    public function wfhRequests(): HasMany
+    {
+        return $this->hasMany(WfhRequest::class);
+    }
+
     public function payslips(): HasMany
     {
         return $this->hasMany(Payslip::class);

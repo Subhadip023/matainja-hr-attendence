@@ -16,6 +16,9 @@
         </div>
         @if ($staff->exists)
             <div class="actions">
+                @unless (in_array($staff->employment_status, ['resigned', 'terminated'], true))
+                    <button type="button" class="btn" data-open-dialog="wfh-dialog">Add WFH</button>
+                @endunless
                 <a class="btn" href="{{ route('admin.staff.salary', $staff) }}">Salary</a>
                 <a class="btn" href="{{ route('admin.attendance.index', ['q' => $staff->employee_code ?: $staff->full_name]) }}">Attendance</a>
             </div>
@@ -177,6 +180,82 @@
             </div>
         </div>
     </form>
+
+    @if ($staff->exists)
+        @php $wfhLabels = ['approved' => ['Approved', 'ok'], 'pending' => ['Waiting for approval', 'warn'], 'rejected' => ['Rejected', 'bad'], 'cancelled' => ['Cancelled', '']]; @endphp
+        <div class="card" id="wfh" style="margin-top:16px">
+            <div class="card-head">
+                <h2>Work from home</h2>
+                <span class="muted small">Employees can also request it in the app; requests appear under <a href="{{ route('admin.approvals.index', ['kind' => 'wfh']) }}">Approvals</a>.</span>
+            </div>
+            @if ($wfhRequests->isEmpty())
+                <div class="card-body"><p class="muted" style="margin:0">No work from home yet.</p></div>
+            @else
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Dates</th><th>Reason</th><th>Status</th><th>Decided by</th><th class="right">Actions</th></tr></thead>
+                        <tbody>
+                        @foreach ($wfhRequests as $wfh)
+                            @php
+                                [$label, $badge] = $wfhLabels[$wfh->status] ?? [ucfirst($wfh->status), ''];
+                                $canCancel = $wfh->status === 'approved' && $wfh->to_date->gte($today);
+                                $started = $wfh->from_date->lt($today);
+                            @endphp
+                            <tr>
+                                <td class="nowrap">
+                                    {{ $wfh->from_date->format('D, d M Y') }}@if (! $wfh->from_date->isSameDay($wfh->to_date)) – {{ $wfh->to_date->format('D, d M Y') }}@endif
+                                    @if ($canCancel && ! $started && ! $wfh->from_date->isSameDay($today))<span class="badge brand">Upcoming</span>@elseif ($canCancel)<span class="badge wfh">Now</span>@endif
+                                </td>
+                                <td>{{ $wfh->reason ?: '—' }}</td>
+                                <td><span class="badge {{ $badge }}">{{ $label }}</span></td>
+                                <td class="muted small">{{ $wfh->approver?->name ?? '—' }}{{ $wfh->approver_comment === 'Added by admin' ? ' (added by admin)' : '' }}</td>
+                                <td class="right">
+                                    @if ($canCancel)
+                                        <form class="inline" method="POST" action="{{ route('admin.staff.wfh.cancel', [$staff, $wfh]) }}"
+                                              data-confirm="{{ $started ? 'End this work from home today? '.$staff->full_name.' will need to check in from the office from today.' : 'Cancel this work from home?' }}">
+                                            @csrf
+                                            <button class="btn sm ghost" type="submit">{{ $started ? 'End now' : 'Cancel' }}</button>
+                                        </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
+
+        <dialog id="wfh-dialog" aria-labelledby="wfh-title" @if ($errors->wfh->any()) data-open-on-load @endif>
+            <form method="POST" action="{{ route('admin.staff.wfh.store', $staff) }}" class="card-body">
+                @csrf
+                <h2 id="wfh-title">Add work from home</h2>
+                <p class="muted" style="margin:4px 0 14px">{{ $staff->full_name }} can check in from anywhere on these days. It's approved straight away.</p>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="wfh_from">From *</label>
+                        <input id="wfh_from" type="date" name="from_date" min="{{ $today->toDateString() }}" value="{{ old('from_date', $today->toDateString()) }}" required
+                               class="{{ $errors->wfh->has('from_date') ? 'is-invalid' : '' }}">
+                        @if ($errors->wfh->has('from_date'))<div class="error">{{ $errors->wfh->first('from_date') }}</div>@endif
+                    </div>
+                    <div class="field">
+                        <label for="wfh_to">To *</label>
+                        <input id="wfh_to" type="date" name="to_date" min="{{ $today->toDateString() }}" value="{{ old('to_date', $today->toDateString()) }}" required
+                               class="{{ $errors->wfh->has('to_date') ? 'is-invalid' : '' }}">
+                        @if ($errors->wfh->has('to_date'))<div class="error">{{ $errors->wfh->first('to_date') }}</div>@endif
+                    </div>
+                    <div class="field wide">
+                        <label for="wfh_reason">Reason</label>
+                        <input id="wfh_reason" type="text" name="reason" maxlength="2000" value="{{ old('reason') }}" placeholder="e.g. Recovering from surgery, internet installation">
+                    </div>
+                </div>
+                <div class="actions" style="justify-content:flex-end">
+                    <button type="button" class="btn" data-close-dialog>Cancel</button>
+                    <button type="submit" class="btn primary">Add work from home</button>
+                </div>
+            </form>
+        </dialog>
+    @endif
 
     @if ($staff->exists && $staff->user_id !== auth()->id())
         @php $blockers = $staff->deletionBlockers(); @endphp

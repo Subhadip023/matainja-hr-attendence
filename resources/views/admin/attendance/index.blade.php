@@ -5,6 +5,8 @@
     @php
         $badge = ['in' => 'ok', 'late' => 'warn', 'wfh' => 'wfh', 'leave' => 'info', 'absent' => ''];
         $isToday = $date->isSameDay($today);
+        // Work from home can be added from today onwards, and isn't needed on a WFH weekday.
+        $canAddWfh = $isToday && ! $isWfhDay;
         $q = request()->except('page');
         $fmtTime = fn ($t) => $t ? $t->copy()->setTimezone($tz)->format('h:i A') : null;
         $place = function (?array $loc, bool $wfh) {
@@ -72,7 +74,7 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                <tr><th>Employee</th><th>Shift</th><th>Check-in</th><th>Check-out</th><th>Worked</th><th>Check-in place</th><th>Check-out place</th><th>Status</th></tr>
+                <tr><th>Employee</th><th>Shift</th><th>Check-in</th><th>Check-out</th><th>Worked</th><th>Check-in place</th><th>Check-out place</th><th>Status</th>@if ($canAddWfh)<th class="right">Work from home</th>@endif</tr>
                 </thead>
                 <tbody>
                 @forelse ($rows as $r)
@@ -127,12 +129,80 @@
                             </td>
                         @endforeach
                         <td><span class="badge {{ $badge[$r['bucket']] }}">{{ $r['label'] }}</span></td>
+                        @if ($canAddWfh)
+                            <td class="right nowrap">
+                                @if ($r['wfh_approved'])
+                                    <span class="muted small">WFH approved</span>
+                                @elseif (! $r['on_leave'])
+                                    <button type="button" class="btn sm" data-open-dialog="wfh-dialog"
+                                            data-wfh-action="{{ route('admin.staff.wfh.store', $s) }}" data-wfh-staff-id="{{ $s->id }}" data-wfh-name="{{ $s->full_name }}">+ WFH</button>
+                                @endif
+                            </td>
+                        @endif
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="empty">No employees match these filters.</td></tr>
+                    <tr><td colspan="{{ $canAddWfh ? 9 : 8 }}" class="empty">No employees match these filters.</td></tr>
                 @endforelse
                 </tbody>
             </table>
         </div>
     </div>
+
+    @if ($canAddWfh)
+        @php
+            // Re-open the pop-up for the same employee when the last submit failed.
+            $wfhRetryId = $errors->wfh->any() ? old('wfh_staff_id') : null;
+        @endphp
+        <dialog id="wfh-dialog" aria-labelledby="wfh-title" @if ($wfhRetryId) data-open-on-load @endif>
+            <form method="POST" action="{{ $wfhRetryId ? route('admin.staff.wfh.store', $wfhRetryId) : '' }}" class="card-body" id="wfh-form">
+                @csrf
+                <input type="hidden" name="return_to" value="attendance">
+                <input type="hidden" name="wfh_staff_id" id="wfh-staff-id" value="{{ $wfhRetryId }}">
+                <input type="hidden" name="wfh_staff_name" id="wfh-staff-name" value="{{ $wfhRetryId ? old('wfh_staff_name') : '' }}">
+                <h2 id="wfh-title">Add work from home</h2>
+                <p class="muted" style="margin:4px 0 14px"><strong id="wfh-name">{{ $wfhRetryId ? old('wfh_staff_name') : '' }}</strong> can check in from anywhere on these days. It's approved straight away.</p>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="wfh_from">From *</label>
+                        <input id="wfh_from" type="date" name="from_date" min="{{ $today->toDateString() }}" value="{{ $wfhRetryId ? old('from_date') : $today->toDateString() }}" required
+                               class="{{ $errors->wfh->has('from_date') ? 'is-invalid' : '' }}">
+                        @if ($errors->wfh->has('from_date'))<div class="error">{{ $errors->wfh->first('from_date') }}</div>@endif
+                    </div>
+                    <div class="field">
+                        <label for="wfh_to">To *</label>
+                        <input id="wfh_to" type="date" name="to_date" min="{{ $today->toDateString() }}" value="{{ $wfhRetryId ? old('to_date') : $today->toDateString() }}" required
+                               class="{{ $errors->wfh->has('to_date') ? 'is-invalid' : '' }}">
+                        @if ($errors->wfh->has('to_date'))<div class="error">{{ $errors->wfh->first('to_date') }}</div>@endif
+                    </div>
+                    <div class="field wide">
+                        <label for="wfh_reason">Reason</label>
+                        <input id="wfh_reason" type="text" name="reason" maxlength="2000" value="{{ $wfhRetryId ? old('reason') : '' }}" placeholder="e.g. Unwell, internet installation">
+                    </div>
+                </div>
+                <div class="actions" style="justify-content:flex-end">
+                    <button type="button" class="btn" data-close-dialog>Cancel</button>
+                    <button type="submit" class="btn primary">Add work from home</button>
+                </div>
+            </form>
+        </dialog>
+    @endif
 @endsection
+
+@if ($canAddWfh)
+@push('scripts')
+<script>
+    // Point the shared "Add work from home" pop-up at the employee whose button was clicked.
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-wfh-action]');
+        if (!btn) return;
+        var form = document.getElementById('wfh-form');
+        form.action = btn.getAttribute('data-wfh-action');
+        document.getElementById('wfh-staff-id').value = btn.getAttribute('data-wfh-staff-id');
+        document.getElementById('wfh-staff-name').value = btn.getAttribute('data-wfh-name');
+        document.getElementById('wfh-name').textContent = btn.getAttribute('data-wfh-name');
+        form.querySelectorAll('.error').forEach(function (el) { el.remove(); });
+        form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
+    });
+</script>
+@endpush
+@endif
