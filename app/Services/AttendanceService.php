@@ -140,6 +140,64 @@ class AttendanceService
         });
     }
 
+    /**
+     * Attendance entered by an admin, e.g. for someone without the app or a
+     * missed check-out. Times are office-local "H:i". Late, worked and
+     * overtime minutes are worked out like an app check-in.
+     *
+     * @param  'present'|'half_day'|'absent'  $mark
+     */
+    public function markManually(Staff $staff, string $workDate, string $mark, ?string $checkIn, ?string $checkOut, ?string $note = null): Attendance
+    {
+        return DB::transaction(function () use ($staff, $workDate, $mark, $checkIn, $checkOut, $note) {
+            $tz = $staff->branch?->timezone ?: config('app.timezone');
+            $assignment = $this->currentShiftAssignment($staff, $workDate);
+
+            $in = $mark === 'absent' || ! $checkIn ? null : CarbonImmutable::parse("{$workDate} {$checkIn}", $tz);
+            $out = $mark === 'absent' || ! $checkOut || ! $in ? null : CarbonImmutable::parse("{$workDate} {$checkOut}", $tz);
+            if ($in && $out && $out->lte($in)) {
+                if (! $assignment?->shift?->crosses_midnight) {
+                    throw ValidationException::withMessages(['check_out' => ['Check-out must be after check-in.']]);
+                }
+                $out = $out->addDay(); // night shift ending after midnight
+            }
+
+            $late = $in && $mark === 'present' ? $this->lateMinutes($staff, $assignment, $in, $workDate) : 0;
+            $status = match (true) {
+                $mark !== 'present' => $mark,
+                $this->isWfhDay($staff, $workDate) => 'wfh',
+                $late > 0 => 'late',
+                default => 'present',
+            };
+
+            $attendance = Attendance::where('staff_id', $staff->id)->whereDate('work_date', $workDate)->lockForUpdate()->first()
+                ?? new Attendance(['staff_id' => $staff->id, 'work_date' => $workDate]);
+            $before = $attendance->exists ? $attendance->only(['status', 'check_in_at', 'check_out_at']) : null;
+
+            // Stored in the app timezone, like app punches.
+            $appTz = config('app.timezone');
+            $attendance->fill([
+                'shift_id' => $attendance->shift_id ?? $assignment?->shift_id,
+                'check_in_at' => $in?->setTimezone($appTz),
+                'check_out_at' => $out?->setTimezone($appTz),
+                'status' => $status,
+                'late_minutes' => $late,
+                'source' => 'manual',
+            ]);
+            $attendance->worked_minutes = $this->workedMinutes($attendance);
+            $attendance->overtime_minutes = $mark === 'present' ? $this->overtimeMinutes($attendance) : 0;
+            $attendance->save();
+
+            $attendance->events()->create([
+                'event_type' => 'correction',
+                'occurred_at' => CarbonImmutable::now(),
+                'metadata' => ['by_user_id' => auth()->id(), 'mark' => $mark, 'note' => $note, 'before' => $before],
+            ]);
+
+            return $attendance;
+        });
+    }
+
     public function startBreak(Attendance $attendance, string $breakType = 'general'): BreakRecord
     {
         if (! $attendance->check_in_at || $attendance->check_out_at) {

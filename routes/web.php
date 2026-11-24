@@ -106,6 +106,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Attendance & approvals
         Route::get('/attendance', [Admin\AttendanceController::class, 'index'])->name('attendance.index');
         Route::get('/attendance/export', [Admin\AttendanceController::class, 'export'])->name('attendance.export');
+        Route::post('/attendance/{staff}/mark', [Admin\AttendanceController::class, 'mark'])->name('attendance.mark');
         Route::get('/approvals', [Admin\ApprovalController::class, 'index'])->name('approvals.index');
         Route::post('/approvals/{kind}/{id}/{decision}', [Admin\ApprovalController::class, 'decide'])
             ->whereIn('kind', ['leave', 'wfh', 'correction'])

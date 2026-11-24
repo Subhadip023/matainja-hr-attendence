@@ -74,7 +74,7 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                <tr><th>Employee</th><th>Shift</th><th>Check-in</th><th>Check-out</th><th>Worked</th><th>Check-in place</th><th>Check-out place</th><th>Status</th>@if ($canAddWfh)<th class="right">Work from home</th>@endif</tr>
+                <tr><th>Employee</th><th>Shift</th><th>Check-in</th><th>Check-out</th><th>Worked</th><th>Check-in place</th><th>Check-out place</th><th>Status</th><th class="right">Actions</th></tr>
                 </thead>
                 <tbody>
                 @forelse ($rows as $r)
@@ -129,19 +129,31 @@
                             </td>
                         @endforeach
                         <td><span class="badge {{ $badge[$r['bucket']] }}">{{ $r['label'] }}</span></td>
-                        @if ($canAddWfh)
-                            <td class="right nowrap">
+                        <td class="right nowrap">
+                            @php
+                                $currentMark = match (true) {
+                                    ! $a => '',
+                                    $a->status === 'half_day' => 'half_day',
+                                    $a->status === 'absent' => 'absent',
+                                    default => $a->check_in_at ? 'present' : '',
+                                };
+                            @endphp
+                            <button type="button" class="btn sm" data-open-dialog="mark-dialog"
+                                    data-mark-action="{{ route('admin.attendance.mark', $s) }}" data-mark-staff-id="{{ $s->id }}" data-mark-name="{{ $s->full_name }}"
+                                    data-mark-current="{{ $currentMark }}" data-mark-in="{{ $a?->check_in_at?->copy()->setTimezone($tz)->format('H:i') }}"
+                                    data-mark-out="{{ $a?->check_out_at?->copy()->setTimezone($tz)->format('H:i') }}">{{ $a ? 'Edit' : 'Mark' }}</button>
+                            @if ($canAddWfh)
                                 @if ($r['wfh_approved'])
                                     <span class="muted small">WFH approved</span>
                                 @elseif (! $r['on_leave'])
                                     <button type="button" class="btn sm" data-open-dialog="wfh-dialog"
                                             data-wfh-action="{{ route('admin.staff.wfh.store', $s) }}" data-wfh-staff-id="{{ $s->id }}" data-wfh-name="{{ $s->full_name }}">+ WFH</button>
                                 @endif
-                            </td>
-                        @endif
+                            @endif
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="{{ $canAddWfh ? 9 : 8 }}" class="empty">No employees match these filters.</td></tr>
+                    <tr><td colspan="9" class="empty">No employees match these filters.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -186,7 +198,85 @@
             </form>
         </dialog>
     @endif
+
+    @php
+        // Re-open the pop-up for the same employee when the last submit failed.
+        $markRetryId = $errors->mark->any() ? old('mark_staff_id') : null;
+    @endphp
+    <dialog id="mark-dialog" aria-labelledby="mark-title" @if ($markRetryId) data-open-on-load @endif>
+        <form method="POST" action="{{ $markRetryId ? route('admin.attendance.mark', $markRetryId) : '' }}" class="card-body" id="mark-form">
+            @csrf
+            <input type="hidden" name="date" value="{{ $date->toDateString() }}">
+            <input type="hidden" name="mark_staff_id" id="mark-staff-id" value="{{ $markRetryId }}">
+            <input type="hidden" name="mark_staff_name" id="mark-staff-name" value="{{ $markRetryId ? old('mark_staff_name') : '' }}">
+            <h2 id="mark-title">Mark attendance</h2>
+            <p class="muted" style="margin:4px 0 14px"><strong id="mark-name">{{ $markRetryId ? old('mark_staff_name') : '' }}</strong> · {{ $date->format('l, d M Y') }}</p>
+            @if ($errors->mark->has('date'))<div class="error">{{ $errors->mark->first('date') }}</div>@endif
+            <div class="field">
+                <label>Mark as *</label>
+                <div class="toolbar" style="gap:14px">
+                    @foreach (\App\Http\Controllers\Admin\AttendanceController::MARKS as $value => $label)
+                        <label class="check" style="font-weight:400"><input type="radio" name="mark" value="{{ $value }}" @checked(($markRetryId ? old('mark') : 'present') === $value)> {{ $label }}</label>
+                    @endforeach
+                </div>
+            </div>
+            <div class="form-grid" id="mark-times">
+                <div class="field">
+                    <label for="mark_in">Check-in</label>
+                    <input id="mark_in" type="time" name="check_in" value="{{ $markRetryId ? old('check_in') : '' }}" class="{{ $errors->mark->has('check_in') ? 'is-invalid' : '' }}">
+                    @if ($errors->mark->has('check_in'))<div class="error">{{ $errors->mark->first('check_in') }}</div>@endif
+                </div>
+                <div class="field">
+                    <label for="mark_out">Check-out</label>
+                    <input id="mark_out" type="time" name="check_out" value="{{ $markRetryId ? old('check_out') : '' }}" class="{{ $errors->mark->has('check_out') ? 'is-invalid' : '' }}">
+                    @if ($errors->mark->has('check_out'))<div class="error">{{ $errors->mark->first('check_out') }}</div>@endif
+                </div>
+            </div>
+            <div class="field">
+                <label for="mark_note">Note</label>
+                <input id="mark_note" type="text" name="note" maxlength="255" value="{{ $markRetryId ? old('note') : '' }}" placeholder="e.g. No smartphone, signed the register">
+            </div>
+            <p class="hint" style="margin:0 0 12px">Times are office time ({{ $tz }}). Late, worked and overtime minutes are worked out from the employee's shift. Saved as a manual entry in the audit log.</p>
+            <div class="actions" style="justify-content:flex-end">
+                <button type="button" class="btn" data-close-dialog>Cancel</button>
+                <button type="submit" class="btn primary">Save attendance</button>
+            </div>
+        </form>
+    </dialog>
 @endsection
+
+@push('scripts')
+<script>
+    // Point the shared "Mark attendance" pop-up at the clicked employee and fill in their current day.
+    (function () {
+        var form = document.getElementById('mark-form');
+        var times = document.getElementById('mark-times');
+        function toggleTimes() {
+            var checked = form.querySelector('input[name=mark]:checked');
+            times.style.display = checked && checked.value === 'absent' ? 'none' : '';
+        }
+        form.addEventListener('change', toggleTimes);
+        toggleTimes();
+
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-mark-action]');
+            if (!btn) return;
+            form.action = btn.getAttribute('data-mark-action');
+            document.getElementById('mark-staff-id').value = btn.getAttribute('data-mark-staff-id');
+            document.getElementById('mark-staff-name').value = btn.getAttribute('data-mark-name');
+            document.getElementById('mark-name').textContent = btn.getAttribute('data-mark-name');
+            var current = btn.getAttribute('data-mark-current') || 'present';
+            form.querySelector('input[name=mark][value=' + current + ']').checked = true;
+            document.getElementById('mark_in').value = btn.getAttribute('data-mark-in') || '';
+            document.getElementById('mark_out').value = btn.getAttribute('data-mark-out') || '';
+            document.getElementById('mark_note').value = '';
+            form.querySelectorAll('.error').forEach(function (el) { el.remove(); });
+            form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
+            toggleTimes();
+        });
+    })();
+</script>
+@endpush
 
 @if ($canAddWfh)
 @push('scripts')

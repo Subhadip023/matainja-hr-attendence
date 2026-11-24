@@ -4,16 +4,21 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Resources\AttendanceResource;
 use App\Models\Attendance;
+use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
+use App\Models\PayrollRun;
 use App\Models\Staff;
 use App\Models\WfhRequest;
 use App\Services\AttendanceService;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -22,6 +27,9 @@ class AttendanceController extends AdminController
     public const FILTERS = [
         'in' => 'Checked in', 'late' => 'Late', 'wfh' => 'WFH', 'leave' => 'On leave', 'absent' => 'Not in',
     ];
+
+    /** What an admin can mark a day as. */
+    public const MARKS = ['present' => 'Present', 'half_day' => 'Half day', 'absent' => 'Absent'];
 
     public function index(Request $request, AttendanceService $service): View
     {
@@ -76,6 +84,52 @@ class AttendanceController extends AdminController
             }
             fclose($out);
         }, 'attendance-'.$date->toDateString().'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Mark or correct one employee's attendance for a day: for staff without
+     * the app, or a missed check-out. Not allowed once that month's payroll is locked.
+     */
+    public function mark(Request $request, Staff $staff, AttendanceService $service): RedirectResponse
+    {
+        $today = $this->today()->toDateString();
+        $data = $request->validateWithBag('mark', [
+            'date' => ['required', 'date_format:Y-m-d', 'before_or_equal:'.$today],
+            'mark' => ['required', Rule::in(array_keys(self::MARKS))],
+            'check_in' => ['nullable', 'required_if:mark,present', 'date_format:H:i'],
+            'check_out' => ['nullable', 'date_format:H:i'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ], [
+            'date.before_or_equal' => 'Attendance can\'t be marked for a future day.',
+            'check_in.required_if' => 'Enter the check-in time.',
+        ]);
+        $date = CarbonImmutable::parse($data['date']);
+        $name = $staff->full_name;
+
+        if ($staff->joining_date && $date->lt($staff->joining_date)) {
+            return back()->withInput()->withErrors(['date' => "{$name} joined on {$staff->joining_date->format('d M Y')}."], 'mark');
+        }
+        $run = PayrollRun::where('year', $date->year)->where('month', $date->month)->first();
+        if ($run && ! $run->isDraft()) {
+            return back()->with('error', "The {$run->label} payroll is {$run->status}, so its attendance can't change. Reopen the payroll first.");
+        }
+
+        try {
+            $attendance = $service->markManually($staff, $data['date'], $data['mark'], $data['check_in'] ?? null, $data['check_out'] ?? null, $data['note'] ?? null);
+        } catch (ValidationException $e) {
+            return back()->withInput()->withErrors($e->errors(), 'mark');
+        }
+        AuditLog::record('attendance.marked_by_admin', $attendance, null, [
+            'staff_id' => $staff->id, 'date' => $data['date'], 'mark' => $data['mark'],
+            'check_in' => $data['check_in'] ?? null, 'check_out' => $data['check_out'] ?? null, 'note' => $data['note'] ?? null,
+        ]);
+
+        $message = "Attendance for {$name} on {$date->format('d M Y')} saved as ".strtolower(self::MARKS[$data['mark']]).'.';
+        if ($run) {
+            $message .= " Recalculate the {$run->label} payroll to include it.";
+        }
+
+        return back()->with('success', $message);
     }
 
     private function date(Request $request): CarbonImmutable
